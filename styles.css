@@ -225,6 +225,13 @@ body {
   box-shadow: none;
 }
 
+.audio-mode-pill.edge-mode {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.2);
+}
+
 .header-quick-toggles {
   display: flex;
   align-items: center;
@@ -1259,6 +1266,62 @@ body {
 .form-hint {
   font-size: 0.72rem;
   color: var(--text-muted);
+}
+
+.api-config-card {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.api-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.badge-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: #e0e7ff;
+  color: #4338ca;
+  letter-spacing: 0.02em;
+}
+
+.input-with-button {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.input-with-button .form-input {
+  flex: 1;
+}
+
+.icon-btn-small {
+  width: 38px;
+  height: 38px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: var(--transition-smooth);
+  flex-shrink: 0;
+}
+
+.icon-btn-small:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
 }
 
 .toggle-group {

@@ -207,7 +207,9 @@ const state = {
   soundEnabled: true,
   vibrationEnabled: true,
   vibeIntensity: "fuerte", // "estandar" (1.0x) | "fuerte" (1.25x - Terapéutica Niños) | "maxima" (1.6x - Para Fundas)
-  audioMode: "hd", // "hd" (Archivos de Audio HD) | "tts" (Sintetizador Normalizado)
+  audioMode: "hd", // "hd" (Archivos de Audio HD) | "edge" (Edge-TTS Neuronal) | "tts" (Sintetizador Normalizado)
+  edgeVoiceName: localStorage.getItem("fonemasens_edge_voice") || "es-ES-ElviraNeural",
+  edgeEndpoint: localStorage.getItem("fonemasens_edge_endpoint") || "/api/tts",
   speechRate: 0.85,
   pauseBetweenSyllables: 700,
   harmonicToneEnabled: true,
@@ -261,6 +263,150 @@ let currentSourceNode = null;
 let currentAudioInstance = null;
 const audioBufferCache = {};
 const audioCache = {};
+
+// ==========================================
+// SERVICIO EDGE-TTS (VOCES NEURONALES & CACHÉ INDEXEDDB)
+// ==========================================
+
+const EDGE_AUDIO_CACHE = {}; // Caché en memoria (AudioBuffers decodificados)
+const DB_NAME = "FonemaSensAudioDB";
+const STORE_NAME = "edge_audio";
+
+function openAudioDB() {
+  return new Promise((resolve) => {
+    if (!("indexedDB" in window)) {
+      resolve(null);
+      return;
+    }
+    const request = indexedDB.open(DB_NAME, 2);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = () => resolve(null);
+  });
+}
+
+async function getCachedAudioFromDB(key) {
+  const db = await openAudioDB();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+async function saveAudioToDB(key, arrayBuffer) {
+  const db = await openAudioDB();
+  if (!db) return;
+  try {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.put(arrayBuffer, key);
+  } catch (e) {}
+}
+
+/**
+ * Consulta el microservicio de Edge-TTS (/api/tts) para sintetizar audio neuronal
+ * Devuelve un AudioBuffer decodificado en memoria para reproducción a 0ms de latencia.
+ */
+async function synthesizeWithEdgeTTS(text, sylType = "normal") {
+  initAudioContext();
+  if (!audioCtx) return null;
+
+  const voice = state.edgeVoiceName || "es-ES-ElviraNeural";
+  const clean = text.trim();
+  const cacheKey = `edge_${clean.toLowerCase()}_${sylType}_${voice}`;
+
+  // 1. Caché en memoria RAM (0ms)
+  if (EDGE_AUDIO_CACHE[cacheKey]) {
+    return EDGE_AUDIO_CACHE[cacheKey];
+  }
+
+  // 2. Caché persistente en IndexedDB (0ms y funciona sin internet)
+  const cachedBuffer = await getCachedAudioFromDB(cacheKey);
+  if (cachedBuffer) {
+    try {
+      const decoded = await audioCtx.decodeAudioData(cachedBuffer.slice(0));
+      EDGE_AUDIO_CACHE[cacheKey] = decoded;
+      return decoded;
+    } catch (e) {
+      console.warn("Error decodificando audio de IndexedDB:", e);
+    }
+  }
+
+  // 3. Petición al microservicio de Edge-TTS (/api/tts)
+  const endpoint = state.edgeEndpoint || "/api/tts";
+  const url = `${endpoint}?text=${encodeURIComponent(clean)}&type=${encodeURIComponent(sylType)}&voice=${encodeURIComponent(voice)}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Edge-TTS respondió con código ${res.status}: ${errText}`);
+  }
+
+  const arrayBuffer = await res.arrayBuffer();
+  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+    throw new Error("Respuesta vacía del microservicio Edge-TTS");
+  }
+
+  // Guardar en IndexedDB para no volver a pedirlo por red
+  saveAudioToDB(cacheKey, arrayBuffer.slice(0));
+
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+  EDGE_AUDIO_CACHE[cacheKey] = audioBuffer;
+  return audioBuffer;
+}
+
+/**
+ * Reproduce un AudioBuffer decodificado con sincronización sample-accurate
+ */
+function playDecodedAudioBuffer(buffer, onAudioActuallyStarted) {
+  if (!state.soundEnabled) {
+    if (typeof onAudioActuallyStarted === "function") onAudioActuallyStarted();
+    return Promise.resolve(true);
+  }
+
+  stopAllAudio();
+  initAudioContext();
+  if (!audioCtx || !buffer) return Promise.resolve(false);
+
+  return new Promise((resolve) => {
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    currentSourceNode = source;
+
+    let hasEnded = false;
+    const finish = () => {
+      if (!hasEnded) {
+        hasEnded = true;
+        currentSourceNode = null;
+        resolve(true);
+      }
+    };
+
+    source.onended = finish;
+
+    // Disparar vibración háptica exactamente al empezar el sonido
+    if (typeof onAudioActuallyStarted === "function") {
+      onAudioActuallyStarted();
+    }
+    source.start(0);
+
+    setTimeout(finish, Math.round(buffer.duration * 1000) + 120);
+  });
+}
 
 /**
  * Carga y decodifica un archivo de audio en un AudioBuffer (PCM en memoria)
@@ -727,7 +873,7 @@ async function playSyllableAudio(syllableObj, wordObj, syllableIndex, onAudioAct
     return;
   }
 
-  // Si el modo es Audio HD, buscar clip pregrabado (en la palabra o en el banco fonético)
+  // 1. Si el modo es Audio HD, buscar clip pregrabado (en la palabra o en el banco fonético)
   if (state.audioMode === "hd") {
     const clipPath = getHDSyllableClip(syllableObj, wordObj, syllableIndex);
     if (clipPath) {
@@ -736,7 +882,22 @@ async function playSyllableAudio(syllableObj, wordObj, syllableIndex, onAudioAct
     }
   }
 
-  // Fallback o Modo TTS directo
+  // 2. Si el modo es Edge-TTS (o HD cuando no hay clip pregrabado)
+  if ((state.audioMode === "edge" || state.audioMode === "hd") && state.audioMode !== "tts") {
+    try {
+      const sylType = syllableObj.type || "normal";
+      const token = syllableObj.cleanText;
+      const buffer = await synthesizeWithEdgeTTS(token, sylType);
+      if (buffer) {
+        const success = await playDecodedAudioBuffer(buffer, onAudioActuallyStarted);
+        if (success) return;
+      }
+    } catch (e) {
+      console.warn("Fallo en síntesis Edge-TTS, usando fallback TTS:", e);
+    }
+  }
+
+  // 3. Fallback o Modo TTS directo del navegador
   await speakSyllableTTS(syllableObj, onAudioActuallyStarted);
 }
 
@@ -762,6 +923,20 @@ async function playFullWordAudio(wordObj) {
     if (audioBufferCache[candidatePath] || KNOWN_HD_CLIPS.has(candidatePath)) {
       const success = await playAudioClip(candidatePath);
       if (success) return;
+    }
+  }
+
+  // 3. Edge-TTS para palabra completa si no hay clip estático
+  if ((state.audioMode === "edge" || state.audioMode === "hd") && state.audioMode !== "tts") {
+    try {
+      const clean = wordObj.clean || "";
+      const buffer = await synthesizeWithEdgeTTS(clean, "word");
+      if (buffer) {
+        const success = await playDecodedAudioBuffer(buffer);
+        if (success) return;
+      }
+    } catch (e) {
+      console.warn("Fallo en Edge-TTS para palabra, usando fallback:", e);
     }
   }
 
@@ -1134,15 +1309,20 @@ function updateAudioModeUI() {
   const text = document.getElementById("audio-mode-text");
   const select = document.getElementById("audio-mode-select");
 
-  const isHD = state.audioMode === "hd";
+  const mode = state.audioMode;
 
   if (btnAudioMode) {
-    btnAudioMode.classList.toggle("tts-mode", !isHD);
+    btnAudioMode.classList.toggle("tts-mode", mode === "tts");
+    btnAudioMode.classList.toggle("edge-mode", mode === "edge");
   }
-  if (icon) icon.textContent = isHD ? "🎧" : "🤖";
-  if (text) text.textContent = isHD ? "HD" : "TTS";
-  if (select && select.value !== state.audioMode) {
-    select.value = state.audioMode;
+  if (icon) {
+    icon.textContent = mode === "hd" ? "🎧" : mode === "edge" ? "⚡" : "🤖";
+  }
+  if (text) {
+    text.textContent = mode === "hd" ? "HD" : mode === "edge" ? "Edge" : "TTS";
+  }
+  if (select && select.value !== mode) {
+    select.value = mode;
   }
 }
 
@@ -1195,6 +1375,8 @@ function saveSettings() {
   localStorage.setItem("fonemasens_audio_mode", state.audioMode);
   localStorage.setItem("fonemasens_speech_rate", state.speechRate.toString());
   localStorage.setItem("fonemasens_pause_between", state.pauseBetweenSyllables.toString());
+  localStorage.setItem("fonemasens_edge_voice", state.edgeVoiceName || "es-ES-ElviraNeural");
+  localStorage.setItem("fonemasens_edge_endpoint", state.edgeEndpoint || "/api/tts");
 }
 
 function loadSettings() {
@@ -1221,6 +1403,16 @@ function loadSettings() {
   const savedPause = localStorage.getItem("fonemasens_pause_between");
   if (savedPause) {
     state.pauseBetweenSyllables = parseInt(savedPause, 10);
+  }
+
+  const savedVoice = localStorage.getItem("fonemasens_edge_voice");
+  if (savedVoice) {
+    state.edgeVoiceName = savedVoice;
+  }
+
+  const savedEndpoint = localStorage.getItem("fonemasens_edge_endpoint");
+  if (savedEndpoint) {
+    state.edgeEndpoint = savedEndpoint;
   }
 }
 
@@ -1250,14 +1442,21 @@ document.addEventListener("DOMContentLoaded", () => {
     window.speechSynthesis.onvoiceschanged = loadVoices;
   }
 
-  // Botón rápido en cabecera: Alternar Audio HD / TTS
+  // Botón rápido en cabecera: Alternar Audio HD / Edge-TTS / TTS Local
   const btnAudioMode = document.getElementById("btn-audio-mode");
   if (btnAudioMode) {
     btnAudioMode.addEventListener("click", () => {
-      state.audioMode = state.audioMode === "hd" ? "tts" : "hd";
+      if (state.audioMode === "hd") {
+        state.audioMode = "edge";
+      } else if (state.audioMode === "edge") {
+        state.audioMode = "tts";
+      } else {
+        state.audioMode = "hd";
+      }
       updateAudioModeUI();
       saveSettings();
-      triggerHaptic([60], state.audioMode === "hd" ? "Modo Audio HD" : "Modo TTS");
+      const label = state.audioMode === "hd" ? "Modo Audio HD" : state.audioMode === "edge" ? "Modo Edge-TTS Neuronal" : "Modo TTS Local";
+      triggerHaptic([60], label);
     });
   }
 
@@ -1308,6 +1507,17 @@ document.addEventListener("DOMContentLoaded", () => {
       if (clip) {
         await playAudioClip(clip, onAudioStart);
       } else {
+        await speakSyllableTTS(syl, onAudioStart);
+      }
+    } else if (state.audioMode === "edge") {
+      try {
+        const buffer = await synthesizeWithEdgeTTS(syl.cleanText, syl.type);
+        if (buffer) {
+          await playDecodedAudioBuffer(buffer, onAudioStart);
+        } else {
+          await speakSyllableTTS(syl, onAudioStart);
+        }
+      } catch (e) {
         await speakSyllableTTS(syl, onAudioStart);
       }
     } else {
@@ -1458,6 +1668,56 @@ document.addEventListener("DOMContentLoaded", () => {
   if (pauseSlider) {
     pauseSlider.value = state.pauseBetweenSyllables;
     if (pauseVal) pauseVal.textContent = `${state.pauseBetweenSyllables} ms`;
+  }
+
+  // Controles de Edge-TTS en Modal
+  const selectEdgeVoice = document.getElementById("select-edge-voice");
+  const inputEdgeEndpoint = document.getElementById("input-edge-endpoint");
+  const btnTestEdgeTts = document.getElementById("btn-test-edge-tts");
+  const edgeTtsStatus = document.getElementById("edge-tts-status");
+
+  if (selectEdgeVoice) {
+    selectEdgeVoice.value = state.edgeVoiceName || "es-ES-ElviraNeural";
+    selectEdgeVoice.addEventListener("change", (e) => {
+      state.edgeVoiceName = e.target.value;
+      saveSettings();
+    });
+  }
+
+  if (inputEdgeEndpoint) {
+    inputEdgeEndpoint.value = state.edgeEndpoint || "/api/tts";
+    inputEdgeEndpoint.addEventListener("input", (e) => {
+      state.edgeEndpoint = e.target.value.trim() || "/api/tts";
+      saveSettings();
+    });
+  }
+
+  if (btnTestEdgeTts) {
+    btnTestEdgeTts.addEventListener("click", async () => {
+      if (edgeTtsStatus) {
+        edgeTtsStatus.textContent = "⏳ Conectando con Edge-TTS...";
+        edgeTtsStatus.style.color = "#4f46e5";
+      }
+
+      try {
+        initAudioContext();
+        const buffer = await synthesizeWithEdgeTTS("rra", "stressed");
+        if (buffer) {
+          triggerHaptic([220, 40, 100], "Prueba Edge-TTS");
+          await playDecodedAudioBuffer(buffer);
+          if (edgeTtsStatus) {
+            edgeTtsStatus.textContent = `✅ ¡Éxito! "rra" sintetizado con ${state.edgeVoiceName}.`;
+            edgeTtsStatus.style.color = "#16a34a";
+          }
+        }
+      } catch (err) {
+        console.error("Error en prueba Edge-TTS:", err);
+        if (edgeTtsStatus) {
+          edgeTtsStatus.textContent = `❌ ${err.message || "Error al conectar"}`;
+          edgeTtsStatus.style.color = "#dc2626";
+        }
+      }
+    });
   }
 
   const closeModal = () => {

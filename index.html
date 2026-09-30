@@ -197,10 +197,46 @@
         <div class="form-group">
           <label for="audio-mode-select">Modo de Audio Principal:</label>
           <select id="audio-mode-select" class="form-select">
-            <option value="hd" selected>🎧 Audio HD Neuronal (Máxima Claridad, Prototipo)</option>
-            <option value="tts">🤖 Síntesis TTS (Con Diccionario Fonético)</option>
+            <option value="hd" selected>🎧 Audio HD Neuronal (Clips Locales de Estudio)</option>
+            <option value="edge">⚡ Edge-TTS (Voz Neuronal Dinámica, Sin Clave)</option>
+            <option value="tts">🤖 Síntesis TTS Local del Dispositivo</option>
           </select>
-          <small class="form-hint">Audio HD reproduce clips de estudio de alta fidelidad. Si agregas palabras nuevas, el sistema usará el TTS normalizado.</small>
+          <small class="form-hint">Audio HD reproduce clips de estudio incluidos. Edge-TTS genera cualquier palabra nueva con voz neuronal y fonética precisa sin requerir clave de API. TTS Local funciona sin internet.</small>
+        </div>
+
+        <!-- Edge-TTS Configuration Card (No API Key Required) -->
+        <div class="form-group api-config-card" id="group-edge-tts">
+          <div class="api-config-header">
+            <label for="select-edge-voice" class="api-label">
+              <span>⚡ Motor de Voz Neuronal Edge-TTS:</span>
+            </label>
+            <span class="badge-tag" style="background: #dcfce7; color: #166534;">100% Gratuito • Sin API Key</span>
+          </div>
+
+          <div class="voice-cloud-row" style="margin-top: 6px;">
+            <label for="select-edge-voice" style="font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 4px;">Voz Neuronal en Español:</label>
+            <select id="select-edge-voice" class="form-select">
+              <option value="es-ES-ElviraNeural" selected>es-ES-ElviraNeural (Femenina - España / Cálida y Pedagógica ⭐)</option>
+              <option value="es-ES-AlvaroNeural">es-ES-AlvaroNeural (Masculina - España / Enérgica y Clara ⭐)</option>
+              <option value="es-MX-DaliaNeural">es-MX-DaliaNeural (Femenina - México / Suave y Nítida)</option>
+              <option value="es-MX-JorgeNeural">es-MX-JorgeNeural (Masculina - México / Neutra)</option>
+              <option value="es-US-PalomaNeural">es-US-PalomaNeural (Femenina - Estados Unidos / Clara)</option>
+              <option value="es-AR-ElenaNeural">es-AR-ElenaNeural (Femenina - Argentina)</option>
+            </select>
+          </div>
+
+          <div class="endpoint-row" style="margin-top: 8px;">
+            <label for="input-edge-endpoint" style="font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 4px;">Endpoint del Microservicio:</label>
+            <input type="text" id="input-edge-endpoint" class="form-input" placeholder="/api/tts" value="/api/tts">
+            <small class="form-hint">Usa <code>/api/tts</code> por defecto (funciona automáticamente en Vercel y en local). Si hospedas el microservicio en otra URL de Vercel, puedes ingresarla aquí.</small>
+          </div>
+
+          <div class="cloud-test-action" style="margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button id="btn-test-edge-tts" type="button" class="pill-btn-small" style="background: #eef2ff; border: 1.5px solid #818cf8; color: #4338ca; font-weight: 600; padding: 6px 12px; border-radius: 999px; cursor: pointer;">
+              🧪 Probar Fonema "rra" con Edge-TTS
+            </button>
+            <span id="edge-tts-status" style="font-size: 0.78rem; color: #64748b; font-weight: 500;"></span>
+          </div>
         </div>
 
         <!-- Phonetic Verification Test Row -->
