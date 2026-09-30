@@ -1428,6 +1428,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const pauseSlider = document.getElementById("pause-slider");
   const pauseVal = document.getElementById("pause-val");
   const toneToggle = document.getElementById("tone-toggle");
+  const countdownSelect = document.getElementById("countdown-select");
+  const vibeIntensitySelect = document.getElementById("vibe-intensity-select");
 
   if (btnOpenSettings && settingsModal) {
     btnOpenSettings.addEventListener("click", () => {
