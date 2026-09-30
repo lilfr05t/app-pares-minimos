@@ -31,6 +31,10 @@
       </div>
       
       <div class="header-actions">
+        <button id="btn-audio-mode" class="audio-mode-pill" title="Cambiar entre Audio HD y TTS" aria-label="Cambiar modo de audio">
+          <span id="audio-mode-icon">🎧</span>
+          <span id="audio-mode-text">HD</span>
+        </button>
         <button id="btn-sound-toggle" class="icon-btn" title="Activar/Desactivar sonido" aria-label="Control de sonido">
           <span class="icon" id="sound-icon">🔊</span>
         </button>
@@ -64,9 +68,17 @@
       <!-- Top Card Nav & Category -->
       <div class="card-meta">
         <span class="word-counter" id="word-counter">Palabra 1 de 6</span>
-        <span class="arasaac-badge" title="Pictogramas certificados de ARASAAC">
-          <span class="arasaac-dot"></span> ARASAAC
-        </span>
+        <div class="card-meta-actions">
+          <button id="btn-edit-current-word" class="word-action-btn" title="Editar esta palabra" aria-label="Editar palabra">
+            <span>✏️</span>
+          </button>
+          <button id="btn-delete-current-word" class="word-action-btn danger" title="Eliminar esta palabra" aria-label="Eliminar palabra">
+            <span>🗑️</span>
+          </button>
+          <span class="arasaac-badge" title="Pictogramas certificados de ARASAAC">
+            <span class="arasaac-dot"></span> ARASAAC
+          </span>
+        </div>
       </div>
 
       <!-- ARASAAC Pictogram Illustration Display -->
@@ -132,9 +144,14 @@
     <section class="word-shelf-section">
       <div class="section-title-row">
         <h2 class="shelf-title">Colección de Palabras</h2>
-        <button id="btn-add-word-modal" class="pill-btn-small" title="Añadir palabra personalizada">
-          <span>➕</span> Nueva
-        </button>
+        <div class="shelf-action-buttons">
+          <button id="btn-reset-words" class="pill-btn-small reset-btn" title="Restaurar las 6 palabras prototipo iniciales">
+            <span>↺</span> Iniciales
+          </button>
+          <button id="btn-add-word-modal" class="pill-btn-small" title="Añadir palabra personalizada">
+            <span>➕</span> Nueva
+          </button>
+        </div>
       </div>
       <div class="word-shelf" id="word-shelf" role="tablist" aria-label="Lista de palabras para practicar">
         <!-- Generado dinámicamente -->
@@ -166,9 +183,39 @@
       </div>
       <div class="modal-body">
         
-        <!-- Voice selector -->
+        <!-- Audio Source Selector -->
         <div class="form-group">
-          <label for="voice-select">Voz en Español (TTS):</label>
+          <label for="audio-mode-select">Modo de Audio Principal:</label>
+          <select id="audio-mode-select" class="form-select">
+            <option value="hd" selected>🎧 Audio HD Neuronal (Máxima Claridad, Prototipo)</option>
+            <option value="tts">🤖 Síntesis TTS (Con Diccionario Fonético)</option>
+          </select>
+          <small class="form-hint">Audio HD reproduce clips de estudio de alta fidelidad. Si agregas palabras nuevas, el sistema usará el TTS normalizado.</small>
+        </div>
+
+        <!-- Phonetic Verification Test Row -->
+        <div class="form-group">
+          <label>Prueba Fonética (Evitar "sodio", "Z-A" y "yu"):</label>
+          <div class="phonetic-test-row">
+            <button id="btn-test-za" class="test-pill-btn" type="button" title="Probar ZA">
+              <span>🗣️</span> "ZA"
+            </button>
+            <button id="btn-test-na" class="test-pill-btn" type="button" title="Probar NA">
+              <span>🗣️</span> "na"
+            </button>
+            <button id="btn-test-ju" class="test-pill-btn" type="button" title="Probar JU">
+              <span>🗣️</span> "ju"
+            </button>
+            <button id="btn-test-cha" class="test-pill-btn" type="button" title="Probar CHA*">
+              <span>🗣️</span> "CHA*"
+            </button>
+          </div>
+          <small class="form-hint" id="phonetic-test-msg">Toca para escuchar: garantizado sin deletreo, sin 'sodio' y sin 'yu'.</small>
+        </div>
+
+        <!-- Voice selector -->
+        <div class="form-group" id="group-voice-select">
+          <label for="voice-select">Voz en Español (TTS Alternativo):</label>
           <select id="voice-select" class="form-select">
             <option value="">Buscando voces del dispositivo...</option>
           </select>
@@ -199,16 +246,26 @@
 
         <!-- Haptics configuration & test -->
         <div class="form-group">
+          <label for="vibe-intensity-select">Potencia de Vibración Táctil:</label>
+          <select id="vibe-intensity-select" class="form-select">
+            <option value="fuerte" selected>🔥 Estimulación Fuerte (Recomendada para Niños)</option>
+            <option value="maxima">🚀 Potencia Máxima (Para Fundas Gruesas o Sensibilidad)</option>
+            <option value="estandar">🍃 Moderada / Estándar</option>
+          </select>
+          <small class="form-hint">Aumenta la fuerza de los pulsos para que el niño perciba físicamente el contraste entre sílabas suaves y fuertes.</small>
+        </div>
+
+        <div class="form-group">
           <label>Prueba de Vibración Háptica:</label>
           <div class="haptic-test-btns">
             <button class="test-vibe-btn" data-vibe="normal">
-              <span>🍃</span> Suave (60ms)
+              <span>🍃</span> Átona (140ms)
             </button>
             <button class="test-vibe-btn" data-vibe="stressed">
-              <span>⚡</span> Fuerte (180ms)
+              <span>⚡</span> Acentuada (Doble Golpe)
             </button>
             <button class="test-vibe-btn" data-vibe="sustained">
-              <span>〰️</span> Sostenida (360ms)
+              <span>〰️</span> Sostenida (Larga 650ms)
             </button>
           </div>
           <small class="form-hint" id="vibe-compatibility-msg">Verificando compatibilidad con el motor de vibración del navegador...</small>
@@ -260,6 +317,60 @@
       <div class="modal-footer">
         <button id="btn-cancel-add" class="secondary-btn">Cancelar</button>
         <button id="btn-save-word" class="primary-btn">Buscar Pictograma y Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Editar Palabra -->
+  <div class="modal-overlay" id="edit-word-modal" role="dialog" aria-modal="true" aria-labelledby="edit-word-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="edit-word-title">✏️ Editar Palabra</h3>
+        <button class="modal-close-btn" id="btn-close-edit-word" aria-label="Cerrar modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="edit-word-pattern">Palabra con formato fonético:</label>
+          <input type="text" id="edit-word-pattern" class="form-input" placeholder="ej. ju-GUE-te" autocomplete="off">
+          <div class="format-help-box">
+            <strong>Reglas de formato:</strong>
+            <ul>
+              <li>Separa sílabas con guión (<code>-</code>).</li>
+              <li>MAYÚSCULAS = Acentuadas (ej. <code>GUE</code>).</li>
+              <li>Asterisco (<code>*</code>) = Sostenidas (ej. <code>CHA*</code>).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-search-term">Término de búsqueda ARASAAC:</label>
+          <input type="text" id="edit-search-term" class="form-input" placeholder="ej. juguete">
+          <small class="form-hint">Si cambias el término, buscará el nuevo pictograma oficial.</small>
+        </div>
+
+        <div id="edit-word-feedback" class="feedback-msg"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-edit" class="secondary-btn">Cancelar</button>
+        <button id="btn-save-edit-word" class="primary-btn">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Confirmar Eliminación -->
+  <div class="modal-overlay" id="delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+    <div class="modal-card small-modal">
+      <div class="modal-header">
+        <h3 id="delete-confirm-title">🗑️ Eliminar Palabra</h3>
+        <button class="modal-close-btn" id="btn-close-delete-modal" aria-label="Cerrar modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>¿Estás seguro de que deseas eliminar la palabra <strong id="delete-word-target-name"></strong>?</p>
+        <small class="form-hint">Siempre puedes restaurar las palabras originales con el botón "↺ Iniciales".</small>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-delete" class="secondary-btn">Cancelar</button>
+        <button id="btn-confirm-delete" class="primary-btn danger-btn">Eliminar</button>
       </div>
     </div>
   </div>
