@@ -209,7 +209,8 @@ const state = {
   vibeIntensity: "fuerte", // "estandar" (1.0x) | "fuerte" (1.25x - Terapéutica Niños) | "maxima" (1.6x - Para Fundas)
   audioMode: "hd", // "hd" (Archivos de Audio HD) | "edge" (Edge-TTS Neuronal) | "tts" (Sintetizador Normalizado)
   edgeVoiceName: localStorage.getItem("fonemasens_edge_voice") || "es-ES-ElviraNeural",
-  edgeEndpoint: localStorage.getItem("fonemasens_edge_endpoint") || "/api/tts",
+  edgeEndpoint: localStorage.getItem("fonemasens_edge_endpoint") || 
+    (window.location.hostname.includes("github.io") ? "https://web-app-fros4.vercel.app/api/tts" : "/api/tts"),
   speechRate: 0.85,
   pauseBetweenSyllables: 700,
   harmonicToneEnabled: true,
@@ -1685,9 +1686,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (inputEdgeEndpoint) {
-    inputEdgeEndpoint.value = state.edgeEndpoint || "/api/tts";
+    const defaultEndpoint = window.location.hostname.includes("github.io")
+      ? "https://web-app-fros4.vercel.app/api/tts"
+      : "/api/tts";
+    inputEdgeEndpoint.value = state.edgeEndpoint || defaultEndpoint;
+    inputEdgeEndpoint.placeholder = defaultEndpoint;
     inputEdgeEndpoint.addEventListener("input", (e) => {
-      state.edgeEndpoint = e.target.value.trim() || "/api/tts";
+      state.edgeEndpoint = e.target.value.trim() || defaultEndpoint;
       saveSettings();
     });
   }

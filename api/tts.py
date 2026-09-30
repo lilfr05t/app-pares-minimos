@@ -47,11 +47,20 @@ class handler(BaseHTTPRequestHandler):
         voice = params.get('voice', ['es-ES-ElviraNeural'])[0]
 
         if not raw_text:
-            self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
+            # Si se visita directamente desde el navegador sin parámetros, mostrar estado del microservicio
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(b'{"error": "Falta parametro text"}')
+            status_payload = (
+                '{\n'
+                '  "status": "online",\n'
+                '  "service": "FonemaSens Edge-TTS Microservice",\n'
+                '  "version": "1.0.0",\n'
+                '  "usage": "/api/tts?text=sol&type=stressed&voice=es-ES-ElviraNeural"\n'
+                '}'
+            )
+            self.wfile.write(status_payload.encode('utf-8'))
             return
 
         speech_text = format_phonetic_text(raw_text, syl_type)
