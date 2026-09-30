@@ -1,0 +1,10 @@
+[project]
+name = "fonemasens-edge-tts"
+version = "0.1.0"
+description = "FonemaSens - Motor Multisensorial del Lenguaje con Edge-TTS"
+dependencies = [
+    "edge-tts>=7.0.0"
+]
+
+[tool.vercel]
+entrypoint = "api.tts:handler"
