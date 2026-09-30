@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FonemaSens - Estimulación Multisensorial del Lenguaje</title>
+  <meta name="description" content="Aplicación web multisensorial (Visual, Táctil y Auditiva) con pictogramas ARASAAC y feedback háptico para el desarrollo y retraso del lenguaje.">
+  <meta name="theme-color" content="#4F46E5">
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- Google Fonts: Fredoka y Outfit para máxima legibilidad pedagógica infantil -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Top Header Bar -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-logo" aria-hidden="true">
+          <span class="logo-emoji">🗣️</span>
+        </div>
+        <div class="brand-text">
+          <h1 class="app-title">FonemaSens</h1>
+          <p class="app-subtitle">Estimulación Visual • Táctil • Auditiva</p>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <button id="btn-sound-toggle" class="icon-btn" title="Activar/Desactivar sonido" aria-label="Control de sonido">
+          <span class="icon" id="sound-icon">🔊</span>
+        </button>
+        <button id="btn-vibrate-toggle" class="icon-btn" title="Probar/Activar vibración háptica" aria-label="Control de vibración">
+          <span class="icon" id="vibrate-icon">📳</span>
+        </button>
+        <button id="btn-open-settings" class="icon-btn" title="Ajustes terapéuticos" aria-label="Ajustes">
+          <span class="icon">⚙️</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Haptic/Sensory Live Status Pill -->
+    <section class="haptic-status-bar" id="haptic-bar">
+      <div class="haptic-wave-indicator" id="haptic-wave" aria-hidden="true">
+        <span class="wave-bar b1"></span>
+        <span class="wave-bar b2"></span>
+        <span class="wave-bar b3"></span>
+        <span class="wave-bar b4"></span>
+        <span class="wave-bar b5"></span>
+      </div>
+      <div class="haptic-label" id="haptic-label">
+        <span id="haptic-desc">Motor háptico listo</span>
+        <span class="haptic-badge" id="haptic-badge">Normal</span>
+      </div>
+    </section>
+
+    <!-- Main Word Practice Card -->
+    <main class="main-card" id="practice-card">
+      
+      <!-- Top Card Nav & Category -->
+      <div class="card-meta">
+        <span class="word-counter" id="word-counter">Palabra 1 de 6</span>
+        <span class="arasaac-badge" title="Pictogramas certificados de ARASAAC">
+          <span class="arasaac-dot"></span> ARASAAC
+        </span>
+      </div>
+
+      <!-- ARASAAC Pictogram Illustration Display -->
+      <div class="pictogram-wrapper" id="pictogram-box">
+        <div class="pictogram-glow" id="pictogram-glow"></div>
+        <img id="pictogram-img" src="https://static.arasaac.org/pictograms/2339/2339_500.png" alt="Pictograma ARASAAC ilustrativo" loading="eager">
+        <div class="pictogram-loading" id="pictogram-loader">
+          <div class="spinner"></div>
+          <span>Cargando pictograma...</span>
+        </div>
+        <div class="card-target-word" id="target-word-clean">CARRO</div>
+      </div>
+
+      <!-- Syllable Sensory Highlight Stage -->
+      <section class="syllables-stage" id="syllables-stage" aria-label="Sílabas interactivas">
+        <!-- Rendered dynamically by app.js -->
+      </section>
+
+      <!-- Syllable Legend / Visual Key -->
+      <div class="syllable-legend">
+        <div class="legend-item">
+          <span class="legend-dot normal"></span>
+          <span>Átona (Suave)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot stressed"></span>
+          <span>Acentuada (Fuerte)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot sustained"></span>
+          <span>Sostenida (*)</span>
+        </div>
+      </div>
+
+      <!-- Main Action Controls -->
+      <div class="action-controls">
+        <button id="btn-prev" class="nav-btn prev-btn" aria-label="Palabra anterior">
+          <span class="btn-arrow">◀</span>
+        </button>
+
+        <button id="btn-play-all" class="play-primary-btn" aria-label="Reproducir palabra completa paso a paso">
+          <span class="play-icon" id="play-icon">▶</span>
+          <span class="play-text" id="play-text">Escuchar y Sentir</span>
+        </button>
+
+        <button id="btn-next" class="nav-btn next-btn" aria-label="Palabra siguiente">
+          <span class="btn-arrow">▶</span>
+        </button>
+      </div>
+
+      <div class="secondary-controls">
+        <button id="btn-repeat-word" class="secondary-btn" title="Repetir la palabra a velocidad lenta">
+          <span>🐢</span> Decir Más Lento
+        </button>
+        <button id="btn-natural-speech" class="secondary-btn" title="Pronunciación continua sin pausas">
+          <span>🗣️</span> Palabra Completa
+        </button>
+      </div>
+
+    </main>
+
+    <!-- Word Selector Carousel / Thumbnail Shelf -->
+    <section class="word-shelf-section">
+      <div class="section-title-row">
+        <h2 class="shelf-title">Colección de Palabras</h2>
+        <button id="btn-add-word-modal" class="pill-btn-small" title="Añadir palabra personalizada">
+          <span>➕</span> Nueva
+        </button>
+      </div>
+      <div class="word-shelf" id="word-shelf" role="tablist" aria-label="Lista de palabras para practicar">
+        <!-- Generado dinámicamente -->
+      </div>
+    </section>
+
+    <!-- Sensory Info Box (Educational for Parents and Therapists) -->
+    <footer class="app-info-card">
+      <div class="info-header">
+        <span class="info-icon">💡</span>
+        <h3>¿Cómo funciona la estimulación multisensorial?</h3>
+      </div>
+      <p class="info-text">
+        El cerebro del niño asocia tres vías simultáneas: <strong>Visual</strong> (resalta la sílaba y muestra el pictograma ARASAAC), <strong>Auditiva</strong> (inflexión de tono y duración con TTS) y <strong>Táctil</strong> (vibración corta para átonas, seca para acentuadas y prolongada para sostenidas).
+      </p>
+      <div class="attribution-note">
+        Símbolos pictográficos propiedad del Gobierno de Aragón y creados por Sergio Palao para <a href="https://arasaac.org" target="_blank" rel="noopener">ARASAAC</a> (CC BY-NC-SA).
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Modal: Ajustes Terapéuticos -->
+  <div class="modal-overlay" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="settings-title">⚙️ Ajustes Terapéuticos</h3>
+        <button class="modal-close-btn" id="btn-close-settings" aria-label="Cerrar modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Voice selector -->
+        <div class="form-group">
+          <label for="voice-select">Voz en Español (TTS):</label>
+          <select id="voice-select" class="form-select">
+            <option value="">Buscando voces del dispositivo...</option>
+          </select>
+          <small class="form-hint">Se recomiendan voces naturales como Google español, Paulina o Mónica.</small>
+        </div>
+
+        <!-- Speed control -->
+        <div class="form-group">
+          <label for="speed-slider">Velocidad de pronunciación: <span id="speed-val">0.85x</span></label>
+          <input type="range" id="speed-slider" min="0.5" max="1.1" step="0.05" value="0.85" class="form-range">
+          <div class="range-labels">
+            <span>Muy lenta (0.5x)</span>
+            <span>Terapéutica (0.85x)</span>
+            <span>Normal (1.0x)</span>
+          </div>
+        </div>
+
+        <!-- Pause duration between syllables -->
+        <div class="form-group">
+          <label for="pause-slider">Pausa entre sílabas: <span id="pause-val">700 ms</span></label>
+          <input type="range" id="pause-slider" min="300" max="1800" step="100" value="700" class="form-range">
+          <div class="range-labels">
+            <span>Rápida (300ms)</span>
+            <span>Estándar (700ms)</span>
+            <span>Larga (1.8s)</span>
+          </div>
+        </div>
+
+        <!-- Haptics configuration & test -->
+        <div class="form-group">
+          <label>Prueba de Vibración Háptica:</label>
+          <div class="haptic-test-btns">
+            <button class="test-vibe-btn" data-vibe="normal">
+              <span>🍃</span> Suave (60ms)
+            </button>
+            <button class="test-vibe-btn" data-vibe="stressed">
+              <span>⚡</span> Fuerte (180ms)
+            </button>
+            <button class="test-vibe-btn" data-vibe="sustained">
+              <span>〰️</span> Sostenida (360ms)
+            </button>
+          </div>
+          <small class="form-hint" id="vibe-compatibility-msg">Verificando compatibilidad con el motor de vibración del navegador...</small>
+        </div>
+
+        <!-- Complementary Audio Tone -->
+        <div class="form-group toggle-group">
+          <label for="tone-toggle">Refuerzo auditivo con tonos armónicos:</label>
+          <input type="checkbox" id="tone-toggle" checked class="form-checkbox">
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button id="btn-save-settings" class="primary-btn">Aceptar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Añadir Nueva Palabra -->
+  <div class="modal-overlay" id="add-word-modal" role="dialog" aria-modal="true" aria-labelledby="add-word-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="add-word-title">➕ Añadir Nueva Palabra</h3>
+        <button class="modal-close-btn" id="btn-close-add-word" aria-label="Cerrar modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="input-word-pattern">Palabra con formato fonético:</label>
+          <input type="text" id="input-word-pattern" class="form-input" placeholder="ej. PLA-ta-no o ju-GUE*-te" autocomplete="off">
+          <div class="format-help-box">
+            <strong>Reglas de formato:</strong>
+            <ul>
+              <li>Separa sílabas con guión (<code>-</code>).</li>
+              <li>Sílabas en <strong>MAYÚSCULAS</strong> = Acentuadas (inflexión alta + vibración fuerte).</li>
+              <li>Sílabas con asterisco (<code>*</code>) = Sostenidas (se alargan + vibración prolongada).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="input-search-term">Término de búsqueda ARASAAC (opcional):</label>
+          <input type="text" id="input-search-term" class="form-input" placeholder="ej. plátano (si difiere del texto)">
+          <small class="form-hint">Buscará automáticamente el pictograma oficial en la API de ARASAAC.</small>
+        </div>
+
+        <div id="add-word-feedback" class="feedback-msg"></div>
+
+      </div>
+      <div class="modal-footer">
+        <button id="btn-cancel-add" class="secondary-btn">Cancelar</button>
+        <button id="btn-save-word" class="primary-btn">Buscar Pictograma y Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="app.js"></script>
+</body>
+</html>
