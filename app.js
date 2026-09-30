@@ -453,11 +453,26 @@ function preloadAudioClip(url) {
 
 function preloadWordAudios(wordObj) {
   if (!wordObj) return;
+
+  // 1. Clips estáticos HD
   if (wordObj.audio) {
     if (wordObj.audio.full) preloadAudioClip(wordObj.audio.full);
     if (Array.isArray(wordObj.audio.syllables)) {
       wordObj.audio.syllables.forEach(url => preloadAudioClip(url));
     }
+  }
+
+  // 2. Si el modo activo es Edge-TTS (o HD en palabras añadidas), precargar en segundo plano
+  if ((state.audioMode === "edge" || state.audioMode === "hd") && wordObj.raw) {
+    try {
+      const syllables = parseWordPattern(wordObj.raw);
+      syllables.forEach(syl => {
+        synthesizeWithEdgeTTS(syl.cleanText, syl.type).catch(() => {});
+      });
+      if (wordObj.clean) {
+        synthesizeWithEdgeTTS(wordObj.clean, "word").catch(() => {});
+      }
+    } catch (e) {}
   }
 }
 
@@ -800,9 +815,13 @@ function speakSyllableTTS(syllableObj, onAudioActuallyStarted) {
     utter.volume = 1.0;
 
     let started = false;
+    let fallbackTimer = null;
+    let finishTimer = null;
+
     const triggerStart = () => {
       if (!started) {
         started = true;
+        if (fallbackTimer) clearTimeout(fallbackTimer);
         if (typeof onAudioActuallyStarted === "function") {
           onAudioActuallyStarted();
         }
@@ -815,6 +834,8 @@ function speakSyllableTTS(syllableObj, onAudioActuallyStarted) {
     const finish = () => {
       if (!hasEnded) {
         hasEnded = true;
+        if (finishTimer) clearTimeout(finishTimer);
+        if (fallbackTimer) clearTimeout(fallbackTimer);
         resolve();
       }
     };
@@ -822,9 +843,10 @@ function speakSyllableTTS(syllableObj, onAudioActuallyStarted) {
     utter.onend = finish;
     utter.onerror = finish;
 
-    // Fallbacks
-    setTimeout(triggerStart, 60);
-    setTimeout(finish, 1800);
+    // Sincronización sample-accurate: utter.onstart es el evento primario exacto.
+    // Solo si onstart no dispara en 380ms (dispositivos antiguos con fallo de evento), actúa el fallback.
+    fallbackTimer = setTimeout(triggerStart, 380);
+    finishTimer = setTimeout(finish, 2200);
 
     window.speechSynthesis.speak(utter);
   });
@@ -905,13 +927,16 @@ async function playSyllableAudio(syllableObj, wordObj, syllableIndex, onAudioAct
 /**
  * Pronuncia o reproduce la palabra completa
  */
-async function playFullWordAudio(wordObj) {
-  if (!state.soundEnabled) return;
+async function playFullWordAudio(wordObj, onAudioActuallyStarted) {
+  if (!state.soundEnabled) {
+    if (typeof onAudioActuallyStarted === "function") onAudioActuallyStarted();
+    return;
+  }
 
   if (state.audioMode === "hd") {
     // 1. Clip explícito en el objeto
     if (wordObj && wordObj.audio && wordObj.audio.full) {
-      const success = await playAudioClip(wordObj.audio.full);
+      const success = await playAudioClip(wordObj.audio.full, onAudioActuallyStarted);
       if (success) return;
     }
 
@@ -922,7 +947,7 @@ async function playFullWordAudio(wordObj) {
       .replace(/[\u0300-\u036f]/g, "");
     const candidatePath = `audio/word_${cleanNormalized}.mp3`;
     if (audioBufferCache[candidatePath] || KNOWN_HD_CLIPS.has(candidatePath)) {
-      const success = await playAudioClip(candidatePath);
+      const success = await playAudioClip(candidatePath, onAudioActuallyStarted);
       if (success) return;
     }
   }
@@ -933,7 +958,7 @@ async function playFullWordAudio(wordObj) {
       const clean = wordObj.clean || "";
       const buffer = await synthesizeWithEdgeTTS(clean, "word");
       if (buffer) {
-        const success = await playDecodedAudioBuffer(buffer);
+        const success = await playDecodedAudioBuffer(buffer, onAudioActuallyStarted);
         if (success) return;
       }
     } catch (e) {
@@ -944,6 +969,7 @@ async function playFullWordAudio(wordObj) {
   // Fallback con TTS
   return new Promise((resolve) => {
     if (!("speechSynthesis" in window)) {
+      if (typeof onAudioActuallyStarted === "function") onAudioActuallyStarted();
       setTimeout(resolve, 500);
       return;
     }
@@ -962,17 +988,37 @@ async function playFullWordAudio(wordObj) {
     utter.rate = Math.max(0.75, state.speechRate);
     utter.volume = 1.0;
 
+    let started = false;
+    let fallbackTimer = null;
+    let finishTimer = null;
+
+    const triggerStart = () => {
+      if (!started) {
+        started = true;
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        if (typeof onAudioActuallyStarted === "function") {
+          onAudioActuallyStarted();
+        }
+      }
+    };
+
+    utter.onstart = triggerStart;
+
     let hasEnded = false;
     const finish = () => {
       if (!hasEnded) {
         hasEnded = true;
+        if (finishTimer) clearTimeout(finishTimer);
+        if (fallbackTimer) clearTimeout(fallbackTimer);
         resolve();
       }
     };
 
     utter.onend = finish;
     utter.onerror = finish;
-    setTimeout(finish, 1800);
+
+    fallbackTimer = setTimeout(triggerStart, 380);
+    finishTimer = setTimeout(finish, 2200);
 
     window.speechSynthesis.speak(utter);
   });
@@ -1250,10 +1296,12 @@ async function playFullSequence() {
     await delay(350);
 
     const picBox = document.getElementById("pictogram-box");
-    if (picBox) picBox.classList.add("active-glow");
+    const onWordAudioStart = () => {
+      if (picBox) picBox.classList.add("active-glow");
+      triggerHaptic([180, 50, 180, 50, 280], "Palabra Completa", 740);
+    };
 
-    triggerHaptic([180, 50, 180, 50, 280], "Palabra Completa", 740);
-    await playFullWordAudio(currentWord);
+    await playFullWordAudio(currentWord, onWordAudioStart);
 
     if (picBox) picBox.classList.remove("active-glow");
     triggerConfetti();
@@ -1718,7 +1766,12 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (err) {
         console.error("Error en prueba Edge-TTS:", err);
         if (edgeTtsStatus) {
-          edgeTtsStatus.textContent = `❌ ${err.message || "Error al conectar"}`;
+          const isFetchErr = err && (err.message || "").includes("Failed to fetch");
+          if (isFetchErr) {
+            edgeTtsStatus.innerHTML = `❌ <strong>Failed to fetch:</strong> Vercel tiene activada la protección privada ("Vercel Authentication").<br><span style="font-size:0.75rem; color:#475569;">Desactiva "Vercel Authentication" en Settings &gt; Deployment Protection de tu proyecto Vercel para permitir acceso público.</span>`;
+          } else {
+            edgeTtsStatus.textContent = `❌ ${err.message || "Error al conectar"}`;
+          }
           edgeTtsStatus.style.color = "#dc2626";
         }
       }
