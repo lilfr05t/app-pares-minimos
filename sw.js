@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fonemasens-v2';
+const CACHE_NAME = 'fonemasens-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -11,12 +11,22 @@ const ASSETS_TO_CACHE = [
   './audio/word_pelota.mp3',
   './audio/word_manzana.mp3',
   './audio/word_cuchara.mp3',
+  './audio/word_juguete.mp3',
   './audio/syl_ca_stressed.mp3',
   './audio/syl_rro.mp3',
+  './audio/syl_rro_stressed.mp3',
+  './audio/syl_rra.mp3',
+  './audio/syl_rra_stressed.mp3',
+  './audio/syl_rre.mp3',
+  './audio/syl_rre_stressed.mp3',
+  './audio/syl_rri.mp3',
+  './audio/syl_rri_stressed.mp3',
+  './audio/syl_rru.mp3',
+  './audio/syl_rru_stressed.mp3',
   './audio/syl_pe_stressed.mp3',
+  './audio/syl_pe.mp3',
   './audio/syl_ba_stressed.mp3',
   './audio/syl_no.mp3',
-  './audio/syl_pe.mp3',
   './audio/syl_lo_stressed.mp3',
   './audio/syl_ta.mp3',
   './audio/syl_man.mp3',
@@ -24,7 +34,13 @@ const ASSETS_TO_CACHE = [
   './audio/syl_na.mp3',
   './audio/syl_cu.mp3',
   './audio/syl_cha_sustained.mp3',
-  './audio/syl_ra.mp3'
+  './audio/syl_ra.mp3',
+  './audio/syl_ju.mp3',
+  './audio/syl_ju_stressed.mp3',
+  './audio/syl_gue.mp3',
+  './audio/syl_gue_stressed.mp3',
+  './audio/syl_te.mp3',
+  './audio/syl_te_stressed.mp3'
 ];
 
 self.addEventListener('install', (e) => {

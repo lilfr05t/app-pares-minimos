@@ -449,6 +449,65 @@ body {
   opacity: 1;
 }
 
+/* Animated Preparation Countdown Overlay */
+.countdown-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(5px);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 25;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.25s ease;
+  pointer-events: none;
+}
+
+.countdown-overlay.show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.countdown-badge {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4f46e5, #818cf8);
+  box-shadow: 0 8px 24px var(--primary-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: countdownPop 0.8s infinite cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.countdown-number {
+  font-family: 'Outfit', sans-serif;
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.countdown-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.02em;
+}
+
+@keyframes countdownPop {
+  0% { transform: scale(0.85); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(0.95); }
+}
+
 .pictogram-wrapper img {
   max-width: 155px;
   max-height: 155px;
@@ -1105,7 +1164,7 @@ body {
 /* Phonetic Verification Buttons */
 .phonetic-test-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
   gap: 6px;
   margin-top: 4px;
 }

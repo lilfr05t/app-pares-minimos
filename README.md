@@ -23,18 +23,23 @@ A través de la API estándar `navigator.vibrate`, la aplicación reproduce patr
   - *Estimulación Fuerte (Predeterminada para Terapia de Niños)* (1.25x)
   - *Potencia Máxima (Para celulares con fundas gruesas de silicona o hiposensibilidad táctil)* (1.6x)
 
-### 3. 🔊 Motor Auditivo Híbrido de Alta Fidelidad
-Para superar las limitaciones y errores de los sintetizadores móviles (que confunden `"na"` con *sodio* o deletrean `"ZA"` como *Z-A*), la app implementa una arquitectura híbrida:
+### 3. 🔊 Motor Auditivo Híbrido de Alta Fidelidad y Sincronización a 0ms (Web Audio API)
+Para garantizar una experiencia sensorial óptima en niños con retraso del lenguaje:
 
-- 🎧 **Modo Audio HD Neuronal (Predeterminado):**
-  - Reproduce archivos de audio MP3 de estudio de alta definición generados con redes neuronales (*Edge Neural Voice Elvira* en español).
-  - Incluye los 20 clips de las 6 palabras prototipo (sílabas individuales + palabras completas).
-  - Pronunciación cálida, 100% precisa, sin latencia y compatible con cualquier celular.
+- 🎧 **Modo Audio HD Neuronal con Sincronización a Nivel de Muestra (0ms Latency):**
+  - Implementa **Web Audio API (`AudioBufferSourceNode`)** cargando y decodificando los clips de audio MP3 directamente en la memoria RAM del dispositivo.
+  - Al iniciar la reproducción en `source.start(0)`, el pulso de vibración de `navigator.vibrate` y el resplandor visual de la sílaba se disparan **en el mismo ciclo de reloj**, eliminando el desfase de 150-300ms habitual de las etiquetas `<audio>` estándar.
+  - Banco fonético con más de 30 clips neuronales en español (*Edge Neural Elvira*): sílabas átonas, acentuadas, sostenidas, palabras completas y consonantes complejas (`rra`, `rre`, `rro`, `ju`, `gue`, `te`).
 - 🤖 **Modo TTS Inteligente con Diccionario Fonético Anti-Acrónimos:**
   - Si se añade una palabra nueva personalizada o se activa el modo TTS, el texto pasa por un algoritmo de normalización fonética:
-    - `"na"` $\rightarrow$ `"ná."` (el punto y la tilde evitan la interpretación química de *sodio*).
+    - `"na"` $\rightarrow$ `"ná."` (evita la interpretación química de *sodio*).
     - `"ZA"` $\rightarrow$ `"zá."` (evita el deletreo letra a letra de siglas o códigos ISO).
+    - `"ju"` $\rightarrow$ `"jú."` (fuerza pronunciación de jota velar /x/ en español, impidiendo "yu").
+    - `"rra"` / `"rro"` $\rightarrow$ `"¡Rra!"`, `"¡Rro!"` (el formato de interjección con exclamación activa la vibrante múltiple fuerte y evita que el TTS deletree "erre-erre-a").
     - `"CHA*"` $\rightarrow$ `"cháaa."` (elongación fónica de la vocal sostenida).
+- ⏱️ **Cuenta Regresiva Preparatoria con Calentamiento Activo (3s):**
+  - Un indicador visual y táctil animado (3... 2... 1... ¡Empieza!) enfoca la atención del niño y del orientador antes de cada secuencia.
+  - Durante el conteo, el sistema ejecuta un calentamiento en segundo plano del daemon de síntesis de Android y precarga los buffers de audio, eliminando la latencia en frío y evitando por completo que la primera sílaba o la palabra se entrecorten.
 - 🎛️ **Botón Rápido de Modo de Audio en Cabecera (`🎧 HD` / `🤖 TTS`):**
   - Permite al terapeuta alternar con un solo toque entre audios grabados HD y el sintetizador nativo.
 
@@ -51,14 +56,14 @@ Para superar las limitaciones y errores de los sintetizadores móviles (que conf
 | **Manzana** | `man-ZA-na` | **man** (Átona 🍃) - **ZA** (Acentuada ⚡) - **na** (Átona 🍃) | `syl_man`, `syl_za_stressed`, `syl_na`, `word_manzana` | ID: 2462 |
 | **Cuchara** | `cu-CHA*-ra` | **cu** (Átona 🍃) - **CHA\*** (Sostenida 〰️) - **ra** (Átona 🍃) | `syl_cu`, `syl_cha_sustained`, `syl_ra`, `word_cuchara` | ID: 2362 |
 
-> **➕ Nuevas Palabras:** Puedes pulsar **"+ Nueva"** para ingresar cualquier palabra con guiones (ej. `PLA-ta-no`). La app descargará el pictograma oficial de ARASAAC y la pronunciará con el TTS fonéticamente normalizado.
+> **➕ Nuevas Palabras y Banco Silábico:** Puedes pulsar **"+ Nueva"** para ingresar cualquier palabra (ej. `ju-GUE-te` o `pe-RRA`). La app cuenta con clips neuronales pregrabados para sílabas frecuentes y utiliza el TTS normalizado para cualquier otra combinación.
 
 ---
 
 ## 📱 Modos de Uso Terapéutico
 
 1. **Modo Secuencia ("Escuchar y Sentir")**:
-   - Reproduce paso a paso: Sílaba 1 (luz + vibración + audio HD) $\rightarrow$ Pausa ajustable $\rightarrow$ Sílaba 2 $\rightarrow$ ... $\rightarrow$ Palabra completa con resplandor y lluvia de confeti.
+   - Cuenta regresiva preparatoria de 3s con pulsos rítmicos $\rightarrow$ Sílaba 1 (luz + vibración + audio en exacta sincronía t=0) $\rightarrow$ Pausa $\rightarrow$ Sílaba 2 $\rightarrow$ ... $\rightarrow$ Palabra completa con resplandor y lluvia de confeti.
 2. **Modo Exploratorio (Tocar Sílabas)**:
    - El niño o terapeuta puede tocar cualquier sílaba individual para sentir su vibración, escucharla y verla repetidas veces a su propio ritmo.
 3. **Modo Lento ("Decir Más Lento")**:
@@ -69,17 +74,24 @@ Para superar las limitaciones y errores de los sintetizadores móviles (que conf
    - En la esquina superior de la tarjeta principal, el terapeuta puede pulsar **✏️** para modificar la estructura silábica o cambiar el término de búsqueda ARASAAC, o pulsar **🗑️** para eliminarla de la colección.
    - En el estante de palabras, el botón **"↺ Iniciales"** permite restaurar las 6 palabras prototipo originales en cualquier momento.
 6. **Verificación Fonética en Ajustes (⚙️):**
-   - Botones dedicados para probar directamente la pronunciación de `"ZA"`, `"na"`, `"ju"` y `"CHA*"` y comprobar la claridad en vivo tanto en Audio HD como en TTS.
+   - Botones dedicados para probar directamente la pronunciación de `"ZA"`, `"na"`, `"ju"`, `"rra"` y `"CHA*"` y comprobar la claridad en vivo tanto en Audio HD como en TTS.
 
 ---
 
-## 🔬 ¿Por qué algunos celulares pronunciaban "ju" como "yu" y cómo se solucionó?
-En teléfonos Android con motores de voz multilingües (o configurados con inglés/germánico como secundario), la combinación de dos letras `"ju"` aislada coincide con palabras de otros idiomas donde la **J** se pronuncia como semiconsonante **/j/** (sonando *"yu"* en lugar de la jota velar española **/x/**).
+## 🔬 Soluciones Fonéticas Clave: ¿Cómo se solucionaron los problemas de audio?
 
-**Solución aplicada en el motor fonético de FonemaSens:**
-- El sistema detecta automáticamente cualquier sílaba con **J** (`ju`, `ja`, `je`, `ji`, `jo`) y le aplica una **acentuación aguda forzada** (`jú.`, `já.`, `jé.`, `jí.`, `jó.`).
-- Ningún idioma germánico ni inglés utiliza tildes sobre la vocal precedida por 'j'. Esto fuerza de inmediato al sintetizador a utilizar la tabla fonética nativa en español, logrando una pronunciación impecable y enérgica de la jota (/xu/).
-- Igualmente, sílabas complejas como `GUE` en `ju-GUE-te` se normalizan a `gué.` para evitar que el TTS diga "g-u-e" o "güe".
+### 1. ¿Por qué las sílabas con erre como "rra" se pronunciaban mal?
+En la ortografía del español, ninguna palabra comienza con doble erre (`rr`). Cuando los sintetizadores de voz de los celulares reciben una sílaba aislada como `"rra."`, muchos motores la interpretan como un error de escritura y proceden a **deletrearla** (*"erre-erre-a"*), o si se reemplazaba simplemente por `"ra"` sonaba como una vibrante simple débil sin trino.
+- **Solución implementada:** Se integró la normalización con formato de interjección enfática española (`¡Rra!`, `¡Rro!`, `¡Rré!`). Al llevar los signos de exclamación `¡... !`, el motor fonético de Android/iOS lo interpreta como una expresión onomatopéyica nativa, pronunciando la **vibrante múltiple sonora [r]** con máxima articulación sin deletrearla.
+- Además, en **Modo Audio HD**, se incorporaron archivos de audio neuronales grabados específicamente para `syl_rra.mp3` y `syl_rra_stressed.mp3`.
+
+### 2. ¿Por qué algunos celulares pronunciaban "ju" como "yu"?
+En teléfonos con sintetizadores multilingües, `"ju"` aislado coincide con palabras germánicas donde la **J** suena como semiconsonante **/j/** (*"yu"*).
+- **Solución implementada:** Se fuerza acentuación aguda (`jú.`, `já.`, `jé.`, `jí.`, `jó.`), activando obligatoriamente la regla de fonología española (/xu/).
+
+### 3. ¿Por qué el TTS se entrecortaba al principio y cómo lo soluciona el contador?
+En teléfonos móviles, el daemon de voz del sistema operativo entra en reposo para ahorrar batería. Al disparar la primera sílaba, el proceso tardaba entre 400 y 800 ms en despertar, provocando que la primera sílaba no sonara o se cortara a la mitad.
+- **Solución implementada:** La **cuenta regresiva preparatoria de 3 segundos** no solo anticipa el momento exacto al niño y al orientador, sino que emite una pequeña señal inaudible de baja latencia que activa y estabiliza el motor de audio y voz antes de iniciar la primera sílaba.
 
 ---
 

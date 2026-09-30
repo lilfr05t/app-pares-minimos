@@ -96,11 +96,19 @@ const PHONETIC_TTS_MAP = {
   "lo": "ló.",
   "ta": "tá.",
   "te": "té.",
-  "rro": "rro.",    // Vibrante múltiple
   "ño": "ñó.",
   "man": "mán.",
   "cha": "chá.",
   "ra": "rá.",
+
+  // Sílabas con erre fuerte (vibrante múltiple /r/)
+  // ¡Usamos exclamación ¡Rra! para forzar interjección fonológica en español,
+  // impidiendo que cualquier sintetizador lo deletree como "erre-erre-a" o lo debilite a erre simple!
+  "rra": "¡Rra!",
+  "rre": "¡Rre!",
+  "rri": "¡Rri!",
+  "rro": "¡Rro!",
+  "rru": "¡Rru!",
 
   // Fonemas de 'j' (fuerza pronunciación de jota velar en español y evita 'yu' o /j/ en motores multilingües)
   "ju": "jú.",
@@ -128,6 +136,18 @@ function normalizeForTTS(cleanSyllable, isStressed, isSustained) {
   // 1. Si está en el diccionario explícito
   if (PHONETIC_TTS_MAP[lower]) {
     let result = PHONETIC_TTS_MAP[lower];
+    if (lower.startsWith("rr")) {
+      const vowel = lower.slice(2, 3);
+      if (isSustained) {
+        return `¡Rr${vowel}${vowel}${vowel}!`;
+      }
+      if (isStressed) {
+        const acc = { a: "á", e: "é", i: "í", o: "ó", u: "ú" }[vowel] || vowel;
+        return `¡Rr${acc}!`;
+      }
+      return result;
+    }
+
     if (isSustained) {
       result = result.replace(/([aeiouáéíóú])\./i, "$1$1$1.");
     }
@@ -137,8 +157,18 @@ function normalizeForTTS(cleanSyllable, isStressed, isSustained) {
   // 2. Regla algorítmica para palabras nuevas
   let token = lower;
 
-  // Si la sílaba contiene 'j' con vocal (ej. "ju"), acentuar agudamente para fijar fonología española
-  if (/^j[aeiou]/i.test(token)) {
+  // Si la sílaba contiene 'rr' (ej. "rra", "rro"), usar exclamación española para forzar vibrante múltiple
+  if (/^rr[aeiou]/i.test(token)) {
+    const vowel = token.slice(2, 3);
+    const accentedVowel = { a: "á", e: "é", i: "í", o: "ó", u: "ú" }[vowel] || vowel;
+    if (isSustained) {
+      return `¡Rr${vowel}${vowel}${vowel}!`;
+    }
+    if (isStressed) {
+      return `¡Rr${accentedVowel}!`;
+    }
+    return `¡Rr${vowel}!`;
+  } else if (/^j[aeiou]/i.test(token)) {
     token = token
       .replace(/^ja/i, "já")
       .replace(/^je/i, "jé")
@@ -172,6 +202,8 @@ const state = {
   currentIndex: 0,
   isPlayingSequence: false,
   sequenceTimeout: null,
+  countdownTimeout: null,
+  countdownSeconds: 3, // 3 segundos para enfocar al niño, anticipar compás y precargar audio
   soundEnabled: true,
   vibrationEnabled: true,
   vibeIntensity: "fuerte", // "estandar" (1.0x) | "fuerte" (1.25x - Terapéutica Niños) | "maxima" (1.6x - Para Fundas)
@@ -183,9 +215,104 @@ const state = {
   spanishVoices: []
 };
 
-// Web Audio Context para tonos armónicos complementarios
+// Banco Fonético de Clips Neuronales HD Pregrabados (0ms de latencia)
+const KNOWN_HD_CLIPS = new Set([
+  "audio/syl_ca_stressed.mp3",
+  "audio/syl_rro.mp3",
+  "audio/syl_rro_stressed.mp3",
+  "audio/syl_rra.mp3",
+  "audio/syl_rra_stressed.mp3",
+  "audio/syl_rre.mp3",
+  "audio/syl_rre_stressed.mp3",
+  "audio/syl_rri.mp3",
+  "audio/syl_rri_stressed.mp3",
+  "audio/syl_rru.mp3",
+  "audio/syl_rru_stressed.mp3",
+  "audio/syl_pe_stressed.mp3",
+  "audio/syl_pe.mp3",
+  "audio/syl_ba_stressed.mp3",
+  "audio/syl_no.mp3",
+  "audio/syl_lo_stressed.mp3",
+  "audio/syl_ta.mp3",
+  "audio/syl_man.mp3",
+  "audio/syl_za_stressed.mp3",
+  "audio/syl_na.mp3",
+  "audio/syl_cu.mp3",
+  "audio/syl_cha_sustained.mp3",
+  "audio/syl_ra.mp3",
+  "audio/syl_ju.mp3",
+  "audio/syl_ju_stressed.mp3",
+  "audio/syl_gue.mp3",
+  "audio/syl_gue_stressed.mp3",
+  "audio/syl_te.mp3",
+  "audio/syl_te_stressed.mp3",
+  "audio/word_carro.mp3",
+  "audio/word_perro.mp3",
+  "audio/word_bano.mp3",
+  "audio/word_pelota.mp3",
+  "audio/word_manzana.mp3",
+  "audio/word_cuchara.mp3",
+  "audio/word_juguete.mp3"
+]);
+
+// Web Audio Context y Caché de Precarga en Memoria RAM
 let audioCtx = null;
+let currentSourceNode = null;
 let currentAudioInstance = null;
+const audioBufferCache = {};
+const audioCache = {};
+
+/**
+ * Carga y decodifica un archivo de audio en un AudioBuffer (PCM en memoria)
+ * Permite reproducción con 0ms de latencia de decodificación y reloj maestro sample-accurate.
+ */
+async function loadAndDecodeAudio(url) {
+  if (!url) return null;
+  if (audioBufferCache[url]) return audioBufferCache[url];
+  initAudioContext();
+  if (!audioCtx) return null;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const arrayBuffer = await res.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    audioBufferCache[url] = audioBuffer;
+    return audioBuffer;
+  } catch (e) {
+    console.warn("No se pudo decodificar AudioBuffer:", url, e);
+    return null;
+  }
+}
+
+function preloadAudioClip(url) {
+  if (!url) return null;
+  // Si Web Audio está activo, decodificar en memoria en segundo plano
+  if (audioCtx && audioCtx.state === "running") {
+    loadAndDecodeAudio(url).catch(() => {});
+  }
+  if (audioCache[url]) return audioCache[url];
+  try {
+    const a = new Audio();
+    a.preload = "auto";
+    a.src = url;
+    a.load();
+    audioCache[url] = a;
+    return a;
+  } catch (e) {
+    return null;
+  }
+}
+
+function preloadWordAudios(wordObj) {
+  if (!wordObj) return;
+  if (wordObj.audio) {
+    if (wordObj.audio.full) preloadAudioClip(wordObj.audio.full);
+    if (Array.isArray(wordObj.audio.syllables)) {
+      wordObj.audio.syllables.forEach(url => preloadAudioClip(url));
+    }
+  }
+}
 
 // ==========================================
 // 4. ANALIZADOR FONÉTICO DE SÍLABAS
@@ -309,29 +436,80 @@ function initAudioContext() {
 }
 
 function stopAllAudio() {
-  if (currentAudioInstance) {
-    currentAudioInstance.pause();
-    currentAudioInstance.currentTime = 0;
-    currentAudioInstance = null;
+  if (currentSourceNode) {
+    try {
+      currentSourceNode.stop();
+      currentSourceNode.disconnect();
+    } catch (e) {}
+    currentSourceNode = null;
   }
-  if ("speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
+  if (currentAudioInstance) {
+    try {
+      currentAudioInstance.pause();
+      currentAudioInstance.currentTime = 0;
+    } catch (e) {}
+    currentAudioInstance = null;
   }
 }
 
 /**
- * Reproduce un archivo de audio MP3 (Audio HD) con promesa
+ * Reproduce un archivo de audio MP3 (Audio HD) con sincronización de latencia cero (0ms)
+ * usando Web Audio API (AudioBufferSourceNode) y fallback seguro a HTMLAudioElement.
  */
-function playAudioClip(url) {
+async function playAudioClip(url, onAudioActuallyStarted) {
+  if (!state.soundEnabled) {
+    if (typeof onAudioActuallyStarted === "function") onAudioActuallyStarted();
+    return true;
+  }
+
+  stopAllAudio();
+  initAudioContext();
+
+  // 1. MÉTODO PRIMARIO: Web Audio API (Precisión sample-accurate a nivel de microsegundo)
+  if (audioCtx) {
+    try {
+      const buffer = await loadAndDecodeAudio(url);
+      if (buffer) {
+        return new Promise((resolve) => {
+          const source = audioCtx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(audioCtx.destination);
+          currentSourceNode = source;
+
+          let hasEnded = false;
+          const finish = () => {
+            if (!hasEnded) {
+              hasEnded = true;
+              currentSourceNode = null;
+              resolve(true);
+            }
+          };
+
+          source.onended = finish;
+
+          // SINCRONIZACIÓN MILIMÉTRICA: Disparar vibración y feedback visual simultáneamente en t=0
+          if (typeof onAudioActuallyStarted === "function") {
+            onAudioActuallyStarted();
+          }
+          source.start(0);
+
+          setTimeout(finish, Math.round(buffer.duration * 1000) + 120);
+        });
+      }
+    } catch (e) {
+      console.warn("Web Audio API falló, usando fallback HTMLAudioElement:", e);
+    }
+  }
+
+  // 2. MÉTODO SECUNDARIO: HTMLAudioElement con escucha precisa al evento 'playing'
   return new Promise((resolve) => {
-    if (!state.soundEnabled) {
-      resolve(true);
-      return;
+    let audio = audioCache[url];
+    if (!audio) {
+      audio = preloadAudioClip(url) || new Audio(url);
     }
 
-    stopAllAudio();
-    const audio = new Audio(url);
     currentAudioInstance = audio;
+    audio.currentTime = 0;
 
     let hasEnded = false;
     const finish = (success) => {
@@ -342,13 +520,26 @@ function playAudioClip(url) {
       }
     };
 
+    let started = false;
+    const triggerStart = () => {
+      if (!started) {
+        started = true;
+        if (typeof onAudioActuallyStarted === "function") {
+          onAudioActuallyStarted();
+        }
+      }
+    };
+
+    audio.addEventListener("playing", triggerStart, { once: true });
     audio.onended = () => finish(true);
     audio.onerror = (err) => {
       console.warn("Clip de audio no encontrado, usando TTS de respaldo:", url, err);
       finish(false);
     };
 
-    audio.play().catch((err) => {
+    audio.play().then(() => {
+      setTimeout(triggerStart, 40);
+    }).catch((err) => {
       console.warn("Error al reproducir audio clip:", err);
       finish(false);
     });
@@ -433,22 +624,26 @@ function loadVoices() {
 }
 
 /**
- * Pronuncia una sílaba con TTS inteligente y normalización anti-acrónimos
+ * Pronuncia una sílaba con TTS inteligente sin entrecortes en Android y sincronización exacta onstart
  */
-function speakSyllableTTS(syllableObj) {
+function speakSyllableTTS(syllableObj, onAudioActuallyStarted) {
   return new Promise((resolve) => {
     if (!state.soundEnabled || !("speechSynthesis" in window)) {
+      if (typeof onAudioActuallyStarted === "function") onAudioActuallyStarted();
       setTimeout(resolve, 350);
       return;
     }
 
     stopAllAudio();
+    // Solo cancelar si la síntesis está activa para evitar el bug de aborto prematuro de Android
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
 
-    // Texto protegido contra acrónimos y fórmulas químicas
     const textToSpeak = syllableObj.ttsText || normalizeForTTS(syllableObj.cleanText, syllableObj.type === "stressed", syllableObj.type === "sustained");
 
     const utter = new SpeechSynthesisUtterance(textToSpeak);
-    utter.lang = "es-ES";
+    utter.lang = state.selectedVoice ? state.selectedVoice.lang : "es-ES";
     if (state.selectedVoice) {
       utter.voice = state.selectedVoice;
     }
@@ -456,6 +651,18 @@ function speakSyllableTTS(syllableObj) {
     utter.pitch = syllableObj.pitch;
     utter.rate = state.speechRate * syllableObj.rateMultiplier;
     utter.volume = 1.0;
+
+    let started = false;
+    const triggerStart = () => {
+      if (!started) {
+        started = true;
+        if (typeof onAudioActuallyStarted === "function") {
+          onAudioActuallyStarted();
+        }
+      }
+    };
+
+    utter.onstart = triggerStart;
 
     let hasEnded = false;
     const finish = () => {
@@ -467,27 +674,70 @@ function speakSyllableTTS(syllableObj) {
 
     utter.onend = finish;
     utter.onerror = finish;
-    setTimeout(finish, 1200);
+
+    // Fallbacks
+    setTimeout(triggerStart, 60);
+    setTimeout(finish, 1800);
 
     window.speechSynthesis.speak(utter);
   });
 }
 
 /**
- * Reproduce una sílaba según el modo activo (Audio HD o TTS Normalizado)
+ * Busca si existe un clip neuronal HD para una sílaba (sea palabra prototipo o agregada por el usuario)
  */
-async function playSyllableAudio(syllableObj, wordObj, syllableIndex) {
-  if (!state.soundEnabled) return;
+function getHDSyllableClip(syllableObj, wordObj, syllableIndex) {
+  // 1. Asignado explícitamente en el objeto palabra
+  if (wordObj && wordObj.audio && Array.isArray(wordObj.audio.syllables) && wordObj.audio.syllables[syllableIndex]) {
+    return wordObj.audio.syllables[syllableIndex];
+  }
 
-  // Si el modo es Audio HD y existe clip pregrabado
-  if (state.audioMode === "hd" && wordObj && wordObj.audio && wordObj.audio.syllables && wordObj.audio.syllables[syllableIndex]) {
-    const clipPath = wordObj.audio.syllables[syllableIndex];
-    const success = await playAudioClip(clipPath);
-    if (success) return;
+  // 2. Buscar en la biblioteca fonética de clips HD pregrabados
+  const token = syllableObj.cleanText;
+  const isStressed = syllableObj.type === "stressed";
+  const isSustained = syllableObj.type === "sustained";
+
+  const candidates = [];
+  if (isSustained) {
+    candidates.push(`audio/syl_${token}_sustained.mp3`);
+  }
+  if (isStressed) {
+    candidates.push(`audio/syl_${token}_stressed.mp3`);
+    candidates.push(`audio/syl_${token}.mp3`);
+  } else {
+    candidates.push(`audio/syl_${token}.mp3`);
+    candidates.push(`audio/syl_${token}_stressed.mp3`);
+  }
+
+  for (const path of candidates) {
+    if (audioBufferCache[path] || KNOWN_HD_CLIPS.has(path)) {
+      return path;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Reproduce una sílaba según el modo activo con callback de sincronización exacta
+ */
+async function playSyllableAudio(syllableObj, wordObj, syllableIndex, onAudioActuallyStarted) {
+  if (!state.soundEnabled) {
+    if (typeof onAudioActuallyStarted === "function") onAudioActuallyStarted();
+    return;
+  }
+
+  // Si el modo es Audio HD, buscar clip pregrabado (en la palabra o en el banco fonético)
+  if (state.audioMode === "hd") {
+    const clipPath = getHDSyllableClip(syllableObj, wordObj, syllableIndex);
+    if (clipPath) {
+      const success = await playAudioClip(clipPath, onAudioActuallyStarted);
+      if (success) return;
+    }
   }
 
   // Fallback o Modo TTS directo
-  await speakSyllableTTS(syllableObj);
+  await speakSyllableTTS(syllableObj, onAudioActuallyStarted);
 }
 
 /**
@@ -496,9 +746,23 @@ async function playSyllableAudio(syllableObj, wordObj, syllableIndex) {
 async function playFullWordAudio(wordObj) {
   if (!state.soundEnabled) return;
 
-  if (state.audioMode === "hd" && wordObj && wordObj.audio && wordObj.audio.full) {
-    const success = await playAudioClip(wordObj.audio.full);
-    if (success) return;
+  if (state.audioMode === "hd") {
+    // 1. Clip explícito en el objeto
+    if (wordObj && wordObj.audio && wordObj.audio.full) {
+      const success = await playAudioClip(wordObj.audio.full);
+      if (success) return;
+    }
+
+    // 2. Clip correspondiente en el banco por nombre de palabra
+    const cleanNormalized = (wordObj.clean || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const candidatePath = `audio/word_${cleanNormalized}.mp3`;
+    if (audioBufferCache[candidatePath] || KNOWN_HD_CLIPS.has(candidatePath)) {
+      const success = await playAudioClip(candidatePath);
+      if (success) return;
+    }
   }
 
   // Fallback con TTS
@@ -509,8 +773,12 @@ async function playFullWordAudio(wordObj) {
     }
 
     stopAllAudio();
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
+
     const utter = new SpeechSynthesisUtterance(wordObj.clean + ".");
-    utter.lang = "es-ES";
+    utter.lang = state.selectedVoice ? state.selectedVoice.lang : "es-ES";
     if (state.selectedVoice) {
       utter.voice = state.selectedVoice;
     }
@@ -528,7 +796,7 @@ async function playFullWordAudio(wordObj) {
 
     utter.onend = finish;
     utter.onerror = finish;
-    setTimeout(finish, 1500);
+    setTimeout(finish, 1800);
 
     window.speechSynthesis.speak(utter);
   });
@@ -667,33 +935,105 @@ function renderActiveWord() {
 
 /**
  * Activa los estímulos multisensoriales para una sílaba específica
+ * Garantiza que la vibración y el audio se disparen en el milisegundo exacto de inicio sonoro
  */
 async function activateSyllable(syllableObj, index, wordObj) {
   const allPills = document.querySelectorAll(".syllable-pill");
   allPills.forEach(p => p.classList.remove("active"));
 
   const targetPill = document.getElementById(`syl-pill-${index}`);
-  if (targetPill) {
-    targetPill.classList.add("active");
-  }
 
-  // 1. Háptico
-  triggerHaptic(syllableObj.vibePattern, syllableObj.typeLabel);
+  // Callback de sincronización exacta: se ejecuta en el instante exacto en que el sonido sale por el altavoz (t=0)
+  const onAudioStart = () => {
+    if (targetPill) targetPill.classList.add("active");
+    triggerHaptic(syllableObj.vibePattern, syllableObj.typeLabel);
+    playHarmonicCue(syllableObj.type);
+  };
 
-  // 2. Auditivo (Tono armónico + Audio HD / TTS)
-  playHarmonicCue(syllableObj.type);
-  await playSyllableAudio(syllableObj, wordObj, index);
+  await playSyllableAudio(syllableObj, wordObj, index, onAudioStart);
 
   if (targetPill) {
     setTimeout(() => {
       targetPill.classList.remove("active");
-    }, 200);
+    }, 150);
   }
 }
 
 // ==========================================
 // 8. SECUENCIADOR MULTISENSORIAL COMPLETO
 // ==========================================
+
+/**
+ * Cuenta regresiva visual y táctil preparatoria (3s por defecto) para enfocar la atención del niño,
+ * anticipar el compás y precargar el motor de audio/TTS para evitar entrecortes.
+ */
+async function runPreparationCountdown() {
+  if (state.countdownSeconds <= 0) {
+    const currentWord = state.words[state.currentIndex];
+    preloadWordAudios(currentWord);
+    return true;
+  }
+
+  const overlay = document.getElementById("countdown-overlay");
+  const numEl = document.getElementById("countdown-number");
+  const labelEl = document.getElementById("countdown-label");
+
+  if (!overlay || !numEl) return true;
+
+  overlay.classList.add("show");
+
+  // Calentamiento del sintetizador TTS en segundo plano:
+  // Dispara un token breve inaudible para despertar el daemon de voz de Android/Chrome
+  // eliminando la latencia de arranque en frío y evitando que la primera sílaba se entrecorte
+  if ("speechSynthesis" in window) {
+    try {
+      const warmup = new SpeechSynthesisUtterance(".");
+      warmup.volume = 0.01;
+      warmup.rate = 2.0;
+      window.speechSynthesis.speak(warmup);
+    } catch (e) {}
+  }
+
+  // Precargar y decodificar audios del elemento activo
+  const currentWord = state.words[state.currentIndex];
+  preloadWordAudios(currentWord);
+
+  const countdownMessages = {
+    3: "¡Preparados...! 👀",
+    2: "¡Atentos...! 👂",
+    1: "¡Listos...! 🚀"
+  };
+
+  for (let sec = state.countdownSeconds; sec >= 1; sec--) {
+    if (!state.isPlayingSequence) {
+      overlay.classList.remove("show");
+      return false;
+    }
+
+    numEl.textContent = sec;
+    numEl.style.animation = "none";
+    void numEl.offsetHeight; // Forzar reflow para reiniciar animación CSS
+    numEl.style.animation = "countdownPop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)";
+
+    if (labelEl) {
+      labelEl.textContent = countdownMessages[sec] || "¡Listos...! 🚀";
+    }
+
+    // Pulso sutil táctil y auditivo para anticipar el compás
+    triggerHaptic([35], "Cuenta Regresiva");
+    playHarmonicCue("normal");
+
+    await new Promise(r => {
+      state.countdownTimeout = setTimeout(r, 900);
+    });
+  }
+
+  if (labelEl) labelEl.textContent = "¡Empieza! ✨";
+  await new Promise(r => setTimeout(r, 220));
+
+  overlay.classList.remove("show");
+  return true;
+}
 
 async function playFullSequence() {
   if (state.isPlayingSequence) {
@@ -703,6 +1043,13 @@ async function playFullSequence() {
 
   state.isPlayingSequence = true;
   updatePlayButton(true);
+
+  // Ejecutar cuenta regresiva preparatoria para enfocar al niño y orientador
+  const ready = await runPreparationCountdown();
+  if (!ready || !state.isPlayingSequence) {
+    stopSequence();
+    return;
+  }
 
   const currentWord = state.words[state.currentIndex];
   const syllables = parseWordPattern(currentWord.raw);
@@ -745,6 +1092,13 @@ function stopSequence() {
     clearTimeout(state.sequenceTimeout);
     state.sequenceTimeout = null;
   }
+  if (state.countdownTimeout) {
+    clearTimeout(state.countdownTimeout);
+    state.countdownTimeout = null;
+  }
+  const overlay = document.getElementById("countdown-overlay");
+  if (overlay) overlay.classList.remove("show");
+
   stopAllAudio();
 
   const allPills = document.querySelectorAll(".syllable-pill");
@@ -835,15 +1189,61 @@ async function searchArasaac(term) {
   return null;
 }
 
+function saveSettings() {
+  localStorage.setItem("fonemasens_countdown_seconds", state.countdownSeconds.toString());
+  localStorage.setItem("fonemasens_vibe_intensity", state.vibeIntensity);
+  localStorage.setItem("fonemasens_audio_mode", state.audioMode);
+  localStorage.setItem("fonemasens_speech_rate", state.speechRate.toString());
+  localStorage.setItem("fonemasens_pause_between", state.pauseBetweenSyllables.toString());
+}
+
+function loadSettings() {
+  const savedCountdown = localStorage.getItem("fonemasens_countdown_seconds");
+  if (savedCountdown !== null) {
+    state.countdownSeconds = parseInt(savedCountdown, 10);
+  }
+
+  const savedVibe = localStorage.getItem("fonemasens_vibe_intensity");
+  if (savedVibe) {
+    state.vibeIntensity = savedVibe;
+  }
+
+  const savedMode = localStorage.getItem("fonemasens_audio_mode");
+  if (savedMode) {
+    state.audioMode = savedMode;
+  }
+
+  const savedRate = localStorage.getItem("fonemasens_speech_rate");
+  if (savedRate) {
+    state.speechRate = parseFloat(savedRate);
+  }
+
+  const savedPause = localStorage.getItem("fonemasens_pause_between");
+  if (savedPause) {
+    state.pauseBetweenSyllables = parseInt(savedPause, 10);
+  }
+}
+
 // ==========================================
 // 11. INICIALIZACIÓN Y EVENTOS
 // ==========================================
 
 document.addEventListener("DOMContentLoaded", () => {
+  loadSettings();
   loadWordList();
   renderShelf();
   renderActiveWord();
   updateAudioModeUI();
+
+  // Primer gesto táctil del usuario desbloquea AudioContext y precarga audios en memoria
+  const unlockAudioOnGesture = () => {
+    initAudioContext();
+    preloadWordAudios(state.words[state.currentIndex]);
+    window.removeEventListener("pointerdown", unlockAudioOnGesture);
+    window.removeEventListener("keydown", unlockAudioOnGesture);
+  };
+  window.addEventListener("pointerdown", unlockAudioOnGesture, { once: true });
+  window.addEventListener("keydown", unlockAudioOnGesture, { once: true });
 
   loadVoices();
   if ("speechSynthesis" in window) {
@@ -856,6 +1256,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnAudioMode.addEventListener("click", () => {
       state.audioMode = state.audioMode === "hd" ? "tts" : "hd";
       updateAudioModeUI();
+      saveSettings();
       triggerHaptic([60], state.audioMode === "hd" ? "Modo Audio HD" : "Modo TTS");
     });
   }
@@ -866,12 +1267,15 @@ document.addEventListener("DOMContentLoaded", () => {
     audioModeSelect.addEventListener("change", (e) => {
       state.audioMode = e.target.value;
       updateAudioModeUI();
+      saveSettings();
     });
   }
 
-  // Pruebas Fonéticas (ZA, NA, CHA*)
+  // Pruebas Fonéticas (ZA, NA, JU, RRA, CHA*)
   const btnTestZa = document.getElementById("btn-test-za");
   const btnTestNa = document.getElementById("btn-test-na");
+  const btnTestJu = document.getElementById("btn-test-ju");
+  const btnTestRra = document.getElementById("btn-test-rra");
   const btnTestCha = document.getElementById("btn-test-cha");
   const testMsg = document.getElementById("phonetic-test-msg");
 
@@ -882,20 +1286,36 @@ document.addEventListener("DOMContentLoaded", () => {
       testMsg.style.color = "#4f46e5";
     }
 
-    if (state.audioMode === "hd" && hdClip) {
-      await playAudioClip(hdClip);
+    const syl = {
+      cleanText: token.replace(/\*/g, "").toLowerCase(),
+      type: type,
+      pitch: type === "stressed" ? 1.35 : (type === "sustained" ? 1.2 : 1.0),
+      rateMultiplier: type === "sustained" ? 0.55 : 1.0,
+      vibePattern: type === "sustained" ? [380, 50, 240] : (type === "stressed" ? [220, 40, 100] : [140]),
+      typeLabel: type === "sustained" ? "Sostenida (*)" : (type === "stressed" ? "Acentuada" : "Átona")
+    };
+
+    const onAudioStart = () => {
+      triggerHaptic(syl.vibePattern, syl.typeLabel);
+      playHarmonicCue(syl.type);
+    };
+
+    if (state.audioMode === "hd") {
+      let clip = hdClip;
+      if (!clip) {
+        clip = getHDSyllableClip(syl, null, 0);
+      }
+      if (clip) {
+        await playAudioClip(clip, onAudioStart);
+      } else {
+        await speakSyllableTTS(syl, onAudioStart);
+      }
     } else {
-      const syl = {
-        cleanText: token.replace(/\*/g, ""),
-        type: type,
-        pitch: type === "stressed" ? 1.35 : (type === "sustained" ? 1.2 : 1.0),
-        rateMultiplier: type === "sustained" ? 0.55 : 1.0
-      };
-      await speakSyllableTTS(syl);
+      await speakSyllableTTS(syl, onAudioStart);
     }
 
     if (testMsg) {
-      testMsg.textContent = `✅ "${token}" articulado claramente sin deletreo ni 'sodio'.`;
+      testMsg.textContent = `✅ "${token}" articulado claramente sin deletreo, sin 'sodio' y con vibrante múltiple.`;
       testMsg.style.color = "#16a34a";
     }
   };
@@ -906,9 +1326,11 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btnTestNa) {
     btnTestNa.addEventListener("click", () => runPhoneticTest("na", "normal", "audio/syl_na.mp3"));
   }
-  const btnTestJu = document.getElementById("btn-test-ju");
   if (btnTestJu) {
-    btnTestJu.addEventListener("click", () => runPhoneticTest("ju", "normal", null));
+    btnTestJu.addEventListener("click", () => runPhoneticTest("ju", "normal", "audio/syl_ju.mp3"));
+  }
+  if (btnTestRra) {
+    btnTestRra.addEventListener("click", () => runPhoneticTest("rra", "stressed", "audio/syl_rra_stressed.mp3"));
   }
   if (btnTestCha) {
     btnTestCha.addEventListener("click", () => runPhoneticTest("CHA*", "sustained", "audio/syl_cha_sustained.mp3"));
@@ -1024,7 +1446,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const closeModal = () => settingsModal && settingsModal.classList.remove("open");
+  // Cargar valores iniciales en los controles
+  if (countdownSelect) countdownSelect.value = state.countdownSeconds.toString();
+  if (vibeIntensitySelect) vibeIntensitySelect.value = state.vibeIntensity;
+  if (speedSlider) {
+    speedSlider.value = state.speechRate;
+    if (speedVal) speedVal.textContent = `${state.speechRate.toFixed(2)}x`;
+  }
+  if (pauseSlider) {
+    pauseSlider.value = state.pauseBetweenSyllables;
+    if (pauseVal) pauseVal.textContent = `${state.pauseBetweenSyllables} ms`;
+  }
+
+  const closeModal = () => {
+    if (settingsModal) settingsModal.classList.remove("open");
+    saveSettings();
+  };
   if (btnCloseSettings) btnCloseSettings.addEventListener("click", closeModal);
   if (btnSaveSettings) btnSaveSettings.addEventListener("click", closeModal);
 
@@ -1039,6 +1476,7 @@ document.addEventListener("DOMContentLoaded", () => {
     speedSlider.addEventListener("input", (e) => {
       state.speechRate = parseFloat(e.target.value);
       speedVal.textContent = `${state.speechRate.toFixed(2)}x`;
+      saveSettings();
     });
   }
 
@@ -1046,6 +1484,7 @@ document.addEventListener("DOMContentLoaded", () => {
     pauseSlider.addEventListener("input", (e) => {
       state.pauseBetweenSyllables = parseInt(e.target.value, 10);
       pauseVal.textContent = `${state.pauseBetweenSyllables} ms`;
+      saveSettings();
     });
   }
 
@@ -1055,12 +1494,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Selector de Cuenta Regresiva
+  if (countdownSelect) {
+    countdownSelect.value = state.countdownSeconds.toString();
+    countdownSelect.addEventListener("change", (e) => {
+      state.countdownSeconds = parseInt(e.target.value, 10);
+      saveSettings();
+    });
+  }
+
   // Selector de Potencia Háptica
-  const vibeIntensitySelect = document.getElementById("vibe-intensity-select");
   if (vibeIntensitySelect) {
     vibeIntensitySelect.value = state.vibeIntensity;
     vibeIntensitySelect.addEventListener("change", (e) => {
       state.vibeIntensity = e.target.value;
+      saveSettings();
       triggerHaptic([220, 40, 100], `Potencia ${state.vibeIntensity.toUpperCase()}`);
     });
   }

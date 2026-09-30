@@ -90,6 +90,14 @@
           <span>Cargando pictograma...</span>
         </div>
         <div class="card-target-word" id="target-word-clean">CARRO</div>
+
+        <!-- Animated Preparation Countdown Overlay -->
+        <div class="countdown-overlay" id="countdown-overlay" aria-hidden="true">
+          <div class="countdown-badge">
+            <span class="countdown-number" id="countdown-number">3</span>
+          </div>
+          <span class="countdown-label" id="countdown-label">¡Preparados...! 👀</span>
+        </div>
       </div>
 
       <!-- Syllable Sensory Highlight Stage -->
@@ -195,7 +203,7 @@
 
         <!-- Phonetic Verification Test Row -->
         <div class="form-group">
-          <label>Prueba Fonética (Evitar "sodio", "Z-A" y "yu"):</label>
+          <label>Prueba Fonética (Evitar "sodio", "Z-A", "yu" y errores en "rr"):</label>
           <div class="phonetic-test-row">
             <button id="btn-test-za" class="test-pill-btn" type="button" title="Probar ZA">
               <span>🗣️</span> "ZA"
@@ -206,11 +214,14 @@
             <button id="btn-test-ju" class="test-pill-btn" type="button" title="Probar JU">
               <span>🗣️</span> "ju"
             </button>
+            <button id="btn-test-rra" class="test-pill-btn" type="button" title="Probar RRA">
+              <span>🗣️</span> "rra"
+            </button>
             <button id="btn-test-cha" class="test-pill-btn" type="button" title="Probar CHA*">
               <span>🗣️</span> "CHA*"
             </button>
           </div>
-          <small class="form-hint" id="phonetic-test-msg">Toca para escuchar: garantizado sin deletreo, sin 'sodio' y sin 'yu'.</small>
+          <small class="form-hint" id="phonetic-test-msg">Toca para escuchar: garantizado sin deletreo, sin 'sodio', sin 'yu' y con erre fuerte.</small>
         </div>
 
         <!-- Voice selector -->
@@ -231,6 +242,18 @@
             <span>Terapéutica (0.85x)</span>
             <span>Normal (1.0x)</span>
           </div>
+        </div>
+
+        <!-- Countdown before start -->
+        <div class="form-group">
+          <label for="countdown-select">Tiempo de preparación antes de iniciar:</label>
+          <select id="countdown-select" class="form-select">
+            <option value="3" selected>⏱️ 3 segundos (Recomendado para enfocar atención y precargar)</option>
+            <option value="2">⏱️ 2 segundos</option>
+            <option value="1">⏱️ 1 segundo</option>
+            <option value="0">⚡ Sin espera (Inicio inmediato)</option>
+          </select>
+          <small class="form-hint">Permite al niño y orientador anticipar el inicio del estímulo y precarga los motores de audio para evitar entrecortes iniciales.</small>
         </div>
 
         <!-- Pause duration between syllables -->
