@@ -2507,6 +2507,24 @@ function initMinimalPairs() {
       playChallengeSecretAudio();
     });
   }
+
+  // Toggle de Acordeón Colapsable: Firma Háptica
+  const btnToggleSig = document.getElementById("btn-toggle-haptic-sig");
+  const sigContent = document.getElementById("sig-content");
+  const sigIcon = document.getElementById("sig-toggle-icon");
+  const sigBox = document.getElementById("haptic-signature-box");
+
+  if (btnToggleSig && sigContent) {
+    btnToggleSig.addEventListener("click", () => {
+      const isExpanded = btnToggleSig.getAttribute("aria-expanded") === "true";
+      const newExpanded = !isExpanded;
+      btnToggleSig.setAttribute("aria-expanded", newExpanded ? "true" : "false");
+      sigContent.style.display = newExpanded ? "grid" : "none";
+      if (sigIcon) sigIcon.textContent = newExpanded ? "▲" : "▼";
+      if (sigBox) sigBox.classList.toggle("open", newExpanded);
+      triggerHaptic([35], "Firma Háptica");
+    });
+  }
 }
 
 /**
@@ -2621,12 +2639,12 @@ function createContrastSyllablePill(syl, wordKey, sylIndex) {
   pill.setAttribute("aria-label", `Sílaba ${syl.text} (${syl.vibeLabel})`);
 
   const textSpan = document.createElement("span");
-  textSpan.className = "syl-text";
+  textSpan.className = "contrast-syl-text";
   textSpan.textContent = syl.text;
 
   const badge = document.createElement("span");
-  badge.className = "syl-type-tag";
-  badge.textContent = syl.isTarget ? "DIANA 🎯" : "COMPARTIDA";
+  badge.className = "contrast-syl-badge";
+  badge.textContent = syl.isTarget ? "⚡ Diana" : "Base";
 
   pill.appendChild(textSpan);
   pill.appendChild(badge);
@@ -2648,29 +2666,41 @@ function renderHapticSignatureBox(pair) {
   if (!sigContent) return;
 
   sigContent.innerHTML = `
-    <div class="sig-item target-a">
-      <span class="sig-badge a">Diana A</span>
+    <div class="sig-item sig-a">
+      <div class="sig-item-head">
+        <span class="sig-badge a">Diana A (${pair.wordA.name})</span>
+      </div>
       <span class="sig-desc">${pair.hapticSignature.targetA}</span>
     </div>
-    <div class="sig-item target-b">
-      <span class="sig-badge b">Diana B</span>
+    <div class="sig-item sig-b">
+      <div class="sig-item-head">
+        <span class="sig-badge b">Diana B (${pair.wordB.name})</span>
+      </div>
       <span class="sig-desc">${pair.hapticSignature.targetB}</span>
     </div>
-    <div class="sig-item shared">
-      <span class="sig-badge base">Compartida</span>
+    <div class="sig-item sig-shared">
+      <div class="sig-item-head">
+        <span class="sig-badge base">Sílaba Compartida</span>
+      </div>
       <span class="sig-desc">${pair.hapticSignature.shared}</span>
     </div>
   `;
 }
 
 /**
- * Reproduce el audio y dispara la vibración diferenciada de una sílaba en el modo de pares
+ * Reproduce el audio y dispara la vibración diferenciada de una sílaba en el modo de pares.
+ * También ilumina temporalmente la tarjeta de la palabra correspondiente para asociar voz y concepto.
  */
 async function playContrastSyllableAudio(syl, wordKey, pillEl) {
   const allPills = document.querySelectorAll(".contrast-syllable-pill");
   allPills.forEach(p => p.classList.remove("active"));
 
   if (pillEl) pillEl.classList.add("active");
+
+  const cardEl = document.getElementById(`contrast-card-${wordKey}`);
+  if (cardEl && !state.isPlayingPairSequence) {
+    cardEl.classList.add("active-speaking");
+  }
 
   const onAudioStart = () => {
     triggerHaptic(syl.vibePattern, syl.vibeLabel);
@@ -2698,11 +2728,17 @@ async function playContrastSyllableAudio(syl, wordKey, pillEl) {
         pillEl.classList.remove("active");
       }, 150);
     }
+    if (cardEl && !state.isPlayingPairSequence) {
+      setTimeout(() => {
+        cardEl.classList.remove("active-speaking");
+      }, 250);
+    }
   }
 }
 
 /**
  * Reproduce la palabra completa de una de las tarjetas (A o B)
+ * e ilumina el fondo de su tarjeta correspondiente (Verde para A, Azul para B)
  */
 async function playContrastWordAudio(wordKey) {
   const pair = MINIMAL_PAIRS_DATA[state.currentPairIndex];
@@ -2711,7 +2747,7 @@ async function playContrastWordAudio(wordKey) {
   const wordObj = wordKey === "a" ? pair.wordA : pair.wordB;
   const cardEl = document.getElementById(`contrast-card-${wordKey}`);
 
-  if (cardEl) cardEl.classList.add("active-glow");
+  if (cardEl) cardEl.classList.add("active-speaking");
 
   const onAudioStart = () => {
     triggerHaptic([180, 50, 180, 50, 240], `Palabra: ${wordObj.name}`, 700);
@@ -2733,9 +2769,9 @@ async function playContrastWordAudio(wordKey) {
   } catch (e) {
     await speakWordTTS(wordObj.name, onAudioStart);
   } finally {
-    if (cardEl) {
+    if (cardEl && !state.isPlayingPairSequence) {
       setTimeout(() => {
-        cardEl.classList.remove("active-glow");
+        cardEl.classList.remove("active-speaking");
       }, 250);
     }
   }
@@ -2804,9 +2840,10 @@ function speakWordTTS(name, onStart) {
 
 /**
  * Ejecuta la secuencia comparativa completa:
- * Palabra A (Sílaba 1 -> Sílaba 2 -> Palabra completa)
- * -> Pausa
- * -> Palabra B (Sílaba 1 -> Sílaba 2 -> Palabra completa)
+ * 1. Ilumina Tarjeta A (VERDE) y reproduce: Sílaba 1 -> Sílaba 2 -> Palabra A completa
+ * 2. Apaga Tarjeta A y realiza pausa de respiración (650ms)
+ * 3. Ilumina Tarjeta B (AZUL) y reproduce: Sílaba 1 -> Sílaba 2 -> Palabra B completa
+ * 4. Apaga Tarjeta B y lanza confeti de celebración
  */
 async function playMinimalPairSequence() {
   if (state.isPlayingPairSequence) {
@@ -2824,9 +2861,12 @@ async function playMinimalPairSequence() {
     state.pairSequenceTimeout = setTimeout(resolve, ms);
   });
 
-  // PARTE 1: PALABRA A
   const cardA = document.getElementById("contrast-card-a");
-  if (cardA) cardA.classList.add("active-glow");
+  const cardB = document.getElementById("contrast-card-b");
+
+  // PARTE 1: PALABRA A (Iluminar fondo de la tarjeta A en VERDE)
+  if (cardA) cardA.classList.add("active-speaking");
+  if (cardB) cardB.classList.remove("active-speaking");
 
   for (let i = 0; i < pair.wordA.syllables.length; i++) {
     if (!state.isPlayingPairSequence) break;
@@ -2838,14 +2878,20 @@ async function playMinimalPairSequence() {
 
   if (state.isPlayingPairSequence) {
     await playContrastWordAudio("a");
-    if (cardA) cardA.classList.remove("active-glow");
-    await delay(700); // Pausa de respiración entre A y B
+    await delay(250);
   }
 
-  // PARTE 2: PALABRA B
+  // Apagar iluminación verde de Palabra A
+  if (cardA) cardA.classList.remove("active-speaking");
+
   if (state.isPlayingPairSequence) {
-    const cardB = document.getElementById("contrast-card-b");
-    if (cardB) cardB.classList.add("active-glow");
+    await delay(650); // Pausa de respiración entre A y B
+  }
+
+  // PARTE 2: PALABRA B (Iluminar fondo de la tarjeta B en AZUL)
+  if (state.isPlayingPairSequence) {
+    if (cardB) cardB.classList.add("active-speaking");
+    if (cardA) cardA.classList.remove("active-speaking");
 
     for (let i = 0; i < pair.wordB.syllables.length; i++) {
       if (!state.isPlayingPairSequence) break;
@@ -2857,7 +2903,13 @@ async function playMinimalPairSequence() {
 
     if (state.isPlayingPairSequence) {
       await playContrastWordAudio("b");
-      if (cardB) cardB.classList.remove("active-glow");
+      await delay(250);
+    }
+
+    // Apagar iluminación azul de Palabra B
+    if (cardB) cardB.classList.remove("active-speaking");
+
+    if (state.isPlayingPairSequence) {
       triggerConfetti();
     }
   }
@@ -2882,8 +2934,8 @@ function stopPairSequence() {
 
   const cardA = document.getElementById("contrast-card-a");
   const cardB = document.getElementById("contrast-card-b");
-  if (cardA) cardA.classList.remove("active-glow");
-  if (cardB) cardB.classList.remove("active-glow");
+  if (cardA) cardA.classList.remove("active-speaking", "active-glow");
+  if (cardB) cardB.classList.remove("active-speaking", "active-glow");
 
   updatePairPlayButton(false);
 }

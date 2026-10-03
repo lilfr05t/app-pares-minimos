@@ -256,17 +256,6 @@
           </div>
         </div>
 
-        <!-- Firma Háptica Explicativa en Tiempo Real -->
-        <div class="haptic-signature-box" id="haptic-signature-box">
-          <div class="sig-header">
-            <span class="sig-icon">📳</span>
-            <span class="sig-title">Firma Háptica del Contraste:</span>
-          </div>
-          <div class="sig-content" id="sig-content">
-            <!-- Dinámico según el par seleccionado -->
-          </div>
-        </div>
-
         <!-- Controles Principales de Comparación -->
         <div class="action-controls pair-controls">
           <button id="btn-pair-prev" class="nav-btn prev-btn" aria-label="Par anterior">
@@ -310,6 +299,23 @@
               <!-- Botones de opción A y B -->
             </div>
             <div class="game-feedback-msg" id="game-feedback-msg"></div>
+          </div>
+        </div>
+
+        <!-- Firma Háptica Explicativa (Colapsable al fondo) -->
+        <div class="haptic-signature-box" id="haptic-signature-box">
+          <button class="sig-accordion-toggle" id="btn-toggle-haptic-sig" type="button" aria-expanded="false" aria-controls="sig-content">
+            <div class="sig-toggle-left">
+              <span class="sig-icon">📳</span>
+              <span class="sig-title">Firma Háptica del Contraste</span>
+            </div>
+            <div class="sig-toggle-right">
+              <span class="sig-toggle-hint">Ver detalles táctiles</span>
+              <span class="sig-toggle-icon" id="sig-toggle-icon">▼</span>
+            </div>
+          </button>
+          <div class="sig-content" id="sig-content" style="display: none;">
+            <!-- Dinámico según el par seleccionado -->
           </div>
         </div>
 
