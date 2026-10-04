@@ -87,7 +87,7 @@ const PHONETIC_TTS_MAP = {
   "na": "ná.",      // Evita 'Sodio' o 'N/A'
   "no": "nó.",
   "sa": "¡Sa!",     // Evita 'S.A.' (Sociedad Anónima)
-  "za": "¡Za!",     // Evita 'Z.A.' (Zona Autónoma o Sudáfrica)
+  "za": "zá.",      // Pronunciación de sílaba continua; evita deletreo 'Z-A' o 'Zeta'
   "zo": "zó.",
   "zu": "zú.",
   "ca": "cá.",      // Evita 'Calcio'

@@ -16,8 +16,12 @@ def format_phonetic_text(text, syl_type):
         return clean
 
     lower = clean.lower()
-    # Evitar que tokens de dos letras se interpreten como siglas (ej. S.A. o Z.A.)
-    if lower in ("sa", "za", "na", "no", "ba", "ca", "cu"):
+    # Para 'za' o 'zá', usar 'zá.' con punto para evitar deletreo de letras individuales ('Z-A' o 'Zeta')
+    if lower in ("za", "zá"):
+        return "zá."
+
+    # Evitar que tokens de dos letras se interpreten como siglas (ej. S.A. o N.A.)
+    if lower in ("sa", "na", "no", "ba", "ca", "cu"):
         return f"¡{clean.capitalize()}!"
 
     if syl_type == "stressed":
@@ -30,9 +34,6 @@ def format_phonetic_text(text, syl_type):
             return f"¡{clean_no_star}{last_vowel * 2}!"
         return f"¡{clean_no_star}!"
     elif syl_type == "word":
-        # Para palabras que inician con 'g', usar punto final declarativo en lugar de ¡! para evitar sonido de 'd'
-        if lower.startswith("g"):
-            return f"{clean.capitalize()}."
         return f"¡{clean}!"
     else:
         # Sílaba normal / átona con punto final para evitar tono interrogativo
@@ -53,6 +54,10 @@ class handler(BaseHTTPRequestHandler):
         raw_text = params.get('text', [''])[0]
         syl_type = params.get('type', ['normal'])[0]
         voice = params.get('voice', ['es-ES-ElviraNeural'])[0]
+
+        # Para palabras o sílabas que inician con 'g' ('gato', 'ga'), usar voz con oclusión velar pura /g/
+        if raw_text.strip().lower().startswith("g") and voice == "es-ES-ElviraNeural":
+            voice = "es-MX-DaliaNeural"
 
         if not raw_text:
             # Si se visita directamente desde el navegador sin parámetros, mostrar estado del microservicio

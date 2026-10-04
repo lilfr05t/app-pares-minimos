@@ -16,7 +16,10 @@ def format_phonetic_text(text, syl_type):
     if clean.startswith("¡") or clean.endswith("."):
         return clean
     lower = clean.lower()
-    if lower in ("sa", "za", "na", "no", "ba", "ca", "cu"):
+    # Para 'za' o 'zá', usar 'zá.' para evitar deletreo de letras ('Z-A' o 'Zeta')
+    if lower in ("za", "zá"):
+        return "zá."
+    if lower in ("sa", "na", "no", "ba", "ca", "cu"):
         return f"¡{clean.capitalize()}!"
     if syl_type == "stressed":
         return f"¡{clean}!"
@@ -27,8 +30,6 @@ def format_phonetic_text(text, syl_type):
             return f"¡{clean_no_star}{last_vowel * 2}!"
         return f"¡{clean_no_star}!"
     elif syl_type == "word":
-        if lower.startswith("g"):
-            return f"{clean.capitalize()}."
         return f"¡{clean}!"
     else:
         return f"{clean}."
@@ -53,6 +54,10 @@ class FonemaSensHandler(SimpleHTTPRequestHandler):
             raw_text = params.get('text', [''])[0]
             syl_type = params.get('type', ['normal'])[0]
             voice = params.get('voice', ['es-ES-ElviraNeural'])[0]
+
+            # Para palabras o sílabas que inician con 'g' ('gato', 'ga'), usar voz con oclusión velar pura /g/
+            if raw_text.strip().lower().startswith("g") and voice == "es-ES-ElviraNeural":
+                voice = "es-MX-DaliaNeural"
 
             if not raw_text:
                 self.send_response(400)
