@@ -86,7 +86,8 @@ const PHONETIC_TTS_MAP = {
   // Evitar símbolos químicos y abreviaturas en motores TTS de celulares
   "na": "ná.",      // Evita 'Sodio' o 'N/A'
   "no": "nó.",
-  "za": "zá.",      // Evita 'Zeta-A' o Sudáfrica
+  "sa": "¡Sa!",     // Evita 'S.A.' (Sociedad Anónima)
+  "za": "¡Za!",     // Evita 'Z.A.' (Zona Autónoma o Sudáfrica)
   "zo": "zó.",
   "zu": "zú.",
   "ca": "cá.",      // Evita 'Calcio'

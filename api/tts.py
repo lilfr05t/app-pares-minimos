@@ -14,7 +14,12 @@ def format_phonetic_text(text, syl_type):
     # Si ya tiene puntuación, devolver limpio
     if clean.startswith("¡") or clean.endswith("."):
         return clean
-        
+
+    lower = clean.lower()
+    # Evitar que tokens de dos letras se interpreten como siglas (ej. S.A. o Z.A.)
+    if lower in ("sa", "za", "na", "no", "ba", "ca", "cu"):
+        return f"¡{clean.capitalize()}!"
+
     if syl_type == "stressed":
         return f"¡{clean}!"
     elif syl_type == "sustained":
@@ -25,6 +30,9 @@ def format_phonetic_text(text, syl_type):
             return f"¡{clean_no_star}{last_vowel * 2}!"
         return f"¡{clean_no_star}!"
     elif syl_type == "word":
+        # Para palabras que inician con 'g', usar punto final declarativo en lugar de ¡! para evitar sonido de 'd'
+        if lower.startswith("g"):
+            return f"{clean.capitalize()}."
         return f"¡{clean}!"
     else:
         # Sílaba normal / átona con punto final para evitar tono interrogativo

@@ -9,7 +9,7 @@ CLIPS = [
     {"filename": "word_casa.mp3", "text": "¡Casa!", "rate": "-10%", "pitch": "+0Hz"},
     {"filename": "word_taza.mp3", "text": "¡Taza!", "rate": "-10%", "pitch": "+0Hz"},
     {"filename": "word_pato.mp3", "text": "¡Pato!", "rate": "-10%", "pitch": "+0Hz"},
-    {"filename": "word_gato.mp3", "text": "¡Gato!", "rate": "-10%", "pitch": "+0Hz"},
+    {"filename": "word_gato.mp3", "text": "Gato.", "rate": "+0%", "pitch": "+0Hz"},
     {"filename": "word_jamon.mp3", "text": "¡Jamón!", "rate": "-10%", "pitch": "+0Hz"},
     {"filename": "word_jabon.mp3", "text": "¡Jabón!", "rate": "-10%", "pitch": "+0Hz"},
     {"filename": "word_pino.mp3", "text": "¡Pino!", "rate": "-10%", "pitch": "+0Hz"},
@@ -17,9 +17,9 @@ CLIPS = [
 
     # Sílabas para CASA vs TAZA
     {"filename": "syl_ca_stressed.mp3", "text": "¡Cá!", "rate": "-15%", "pitch": "+15Hz"},
-    {"filename": "syl_sa.mp3", "text": "sa.", "rate": "-15%", "pitch": "-5Hz"},
+    {"filename": "syl_sa.mp3", "text": "¡Sa!", "rate": "-10%", "pitch": "-5Hz"},
     {"filename": "syl_ta_stressed.mp3", "text": "¡Tá!", "rate": "-15%", "pitch": "+15Hz"},
-    {"filename": "syl_za.mp3", "text": "za.", "rate": "-15%", "pitch": "-5Hz"},
+    {"filename": "syl_za.mp3", "text": "¡Za!", "rate": "-10%", "pitch": "-5Hz"},
 
     # Sílabas para PATO vs GATO
     {"filename": "syl_pa_stressed.mp3", "text": "¡Pá!", "rate": "-15%", "pitch": "+15Hz"},
