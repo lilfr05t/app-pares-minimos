@@ -64,109 +64,264 @@
       </div>
     </section>
 
-    <!-- Main Word Practice Card -->
-    <main class="main-card" id="practice-card">
-      
-      <!-- Top Card Nav & Category -->
-      <div class="card-meta">
-        <span class="word-counter" id="word-counter">Palabra 1 de 6</span>
-        <div class="card-meta-actions">
-          <button id="btn-edit-current-word" class="word-action-btn" title="Editar esta palabra" aria-label="Editar palabra">
-            <span>✏️</span>
-          </button>
-          <button id="btn-delete-current-word" class="word-action-btn danger" title="Eliminar esta palabra" aria-label="Eliminar palabra">
-            <span>🗑️</span>
-          </button>
-          <span class="arasaac-badge" title="Pictogramas certificados de ARASAAC">
-            <span class="arasaac-dot"></span> ARASAAC
-          </span>
-        </div>
-      </div>
+    <!-- Navigation Tabs entre Modos -->
+    <nav class="app-mode-tabs" role="tablist" aria-label="Modo de estimulación">
+      <button id="tab-btn-syllables" class="mode-tab-btn active" role="tab" aria-selected="true" aria-controls="view-syllables-mode">
+        <span class="tab-btn-icon">🔤</span>
+        <span class="tab-btn-text">Segmentación</span>
+      </button>
+      <button id="tab-btn-pairs" class="mode-tab-btn" role="tab" aria-selected="false" aria-controls="view-pairs-mode">
+        <span class="tab-btn-icon">⚖️</span>
+        <span class="tab-btn-text">Pares Mínimos</span>
+        <span class="tab-btn-badge">NUEVO</span>
+      </button>
+    </nav>
 
-      <!-- ARASAAC Pictogram Illustration Display -->
-      <div class="pictogram-wrapper" id="pictogram-box">
-        <div class="pictogram-glow" id="pictogram-glow"></div>
-        <img id="pictogram-img" src="https://static.arasaac.org/pictograms/2339/2339_500.png" alt="Pictograma ARASAAC ilustrativo" loading="eager">
-        <div class="pictogram-loading" id="pictogram-loader">
-          <div class="spinner"></div>
-          <span>Cargando pictograma...</span>
-        </div>
-        <div class="card-target-word" id="target-word-clean">CARRO</div>
-
-        <!-- Animated Preparation Countdown Overlay -->
-        <div class="countdown-overlay" id="countdown-overlay" aria-hidden="true">
-          <div class="countdown-badge">
-            <span class="countdown-number" id="countdown-number">3</span>
+    <!-- VISTA 1: SEGMENTACIÓN SILÁBICA (Modo Original) -->
+    <div id="view-syllables-mode" class="mode-view active">
+      <!-- Main Word Practice Card -->
+      <main class="main-card" id="practice-card">
+        
+        <!-- Top Card Nav & Category -->
+        <div class="card-meta">
+          <span class="word-counter" id="word-counter">Palabra 1 de 6</span>
+          <div class="card-meta-actions">
+            <button id="btn-edit-current-word" class="word-action-btn" title="Editar esta palabra" aria-label="Editar palabra">
+              <span>✏️</span>
+            </button>
+            <button id="btn-delete-current-word" class="word-action-btn danger" title="Eliminar esta palabra" aria-label="Eliminar palabra">
+              <span>🗑️</span>
+            </button>
+            <span class="arasaac-badge" title="Pictogramas certificados de ARASAAC">
+              <span class="arasaac-dot"></span> ARASAAC
+            </span>
           </div>
-          <span class="countdown-label" id="countdown-label">¡Preparados...! 👀</span>
         </div>
-      </div>
 
-      <!-- Syllable Sensory Highlight Stage -->
-      <section class="syllables-stage" id="syllables-stage" aria-label="Sílabas interactivas">
-        <!-- Rendered dynamically by app.js -->
+        <!-- ARASAAC Pictogram Illustration Display -->
+        <div class="pictogram-wrapper" id="pictogram-box">
+          <div class="pictogram-glow" id="pictogram-glow"></div>
+          <img id="pictogram-img" src="https://static.arasaac.org/pictograms/2339/2339_500.png" alt="Pictograma ARASAAC ilustrativo" loading="eager">
+          <div class="pictogram-loading" id="pictogram-loader">
+            <div class="spinner"></div>
+            <span>Cargando pictograma...</span>
+          </div>
+          <div class="card-target-word" id="target-word-clean">CARRO</div>
+
+          <!-- Animated Preparation Countdown Overlay -->
+          <div class="countdown-overlay" id="countdown-overlay" aria-hidden="true">
+            <div class="countdown-badge">
+              <span class="countdown-number" id="countdown-number">3</span>
+            </div>
+            <span class="countdown-label" id="countdown-label">¡Preparados...! 👀</span>
+          </div>
+        </div>
+
+        <!-- Syllable Sensory Highlight Stage -->
+        <section class="syllables-stage" id="syllables-stage" aria-label="Sílabas interactivas">
+          <!-- Rendered dynamically by app.js -->
+        </section>
+
+        <!-- Syllable Legend / Visual Key -->
+        <div class="syllable-legend">
+          <div class="legend-item">
+            <span class="legend-dot normal"></span>
+            <span>Átona (Suave)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot stressed"></span>
+            <span>Acentuada (Fuerte)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot sustained"></span>
+            <span>Sostenida (*)</span>
+          </div>
+        </div>
+
+        <!-- Main Action Controls -->
+        <div class="action-controls">
+          <button id="btn-prev" class="nav-btn prev-btn" aria-label="Palabra anterior">
+            <span class="btn-arrow">◀</span>
+          </button>
+
+          <button id="btn-play-all" class="play-primary-btn" aria-label="Reproducir palabra completa paso a paso">
+            <span class="play-icon" id="play-icon">▶</span>
+            <span class="play-text" id="play-text">Escuchar y Sentir</span>
+          </button>
+
+          <button id="btn-next" class="nav-btn next-btn" aria-label="Palabra siguiente">
+            <span class="btn-arrow">▶</span>
+          </button>
+        </div>
+
+        <div class="secondary-controls">
+          <button id="btn-repeat-word" class="secondary-btn" title="Repetir la palabra a velocidad lenta">
+            <span>🐢</span> Decir Más Lento
+          </button>
+          <button id="btn-natural-speech" class="secondary-btn" title="Pronunciación continua sin pausas">
+            <span>🗣️</span> Palabra Completa
+          </button>
+        </div>
+
+      </main>
+
+      <!-- Word Selector Carousel / Thumbnail Shelf -->
+      <section class="word-shelf-section">
+        <div class="section-title-row">
+          <h2 class="shelf-title">Colección de Palabras</h2>
+          <div class="shelf-action-buttons">
+            <button id="btn-reset-words" class="pill-btn-small reset-btn" title="Restaurar las 6 palabras prototipo iniciales">
+              <span>↺</span> Iniciales
+            </button>
+            <button id="btn-add-word-modal" class="pill-btn-small" title="Añadir palabra personalizada">
+              <span>➕</span> Nueva
+            </button>
+          </div>
+        </div>
+        <div class="word-shelf" id="word-shelf" role="tablist" aria-label="Lista de palabras para practicar">
+          <!-- Generado dinámicamente -->
+        </div>
+      </section>
+    </div>
+
+    <!-- VISTA 2: PARES MÍNIMOS (Nuevo Modo de Discriminación Fonémica) -->
+    <div id="view-pairs-mode" class="mode-view" style="display: none;">
+      
+      <!-- Top Card Header: Meta y Selector de Par -->
+      <section class="pair-header-card">
+        <div class="pair-meta-row">
+          <div class="pair-title-box">
+            <span class="pair-counter" id="pair-counter">Par 1 de 4</span>
+            <h2 class="pair-active-title" id="pair-active-title">CASA vs TAZA</h2>
+          </div>
+          <span class="pair-contrast-badge" id="pair-contrast-badge">/k/ vs /t/</span>
+        </div>
+        
+        <!-- Carrusel / Shelf de los 4 Pares de Prueba -->
+        <div class="pair-shelf-scroll" id="pair-shelf-scroll" role="tablist" aria-label="Lista de pares mínimos">
+          <!-- Generado dinámicamente con los 4 pares -->
+        </div>
       </section>
 
-      <!-- Syllable Legend / Visual Key -->
-      <div class="syllable-legend">
-        <div class="legend-item">
-          <span class="legend-dot normal"></span>
-          <span>Átona (Suave)</span>
+      <!-- Escenario de Contraste Dual (Dos Tarjetas Enfrentadas) -->
+      <main class="dual-contrast-card" id="dual-contrast-card">
+        
+        <!-- Sub-barra de Estado del Par -->
+        <div class="contrast-type-label" id="contrast-type-label">
+          <span class="type-icon">🎯</span>
+          <span id="contrast-type-text">Punto de Articulación: Velar /k/ vs Dental /t/</span>
         </div>
-        <div class="legend-item">
-          <span class="legend-dot stressed"></span>
-          <span>Acentuada (Fuerte)</span>
+
+        <div class="contrast-stage-row">
+          <!-- Tarjeta Palabra A -->
+          <div class="contrast-card card-a" id="contrast-card-a">
+            <div class="contrast-glow"></div>
+            <div class="card-pill-tag tag-a">Palabra A</div>
+            <div class="contrast-img-wrapper" id="img-wrapper-a">
+              <img id="img-pair-a" src="https://static.arasaac.org/pictograms/2317/2317_500.png" alt="Pictograma A" loading="eager">
+            </div>
+            <h3 class="contrast-word-name" id="name-pair-a">CASA</h3>
+            
+            <div class="contrast-syllables-container" id="syllables-pair-a">
+              <!-- Sílabas Palabra A -->
+            </div>
+
+            <button class="listen-word-pill" id="btn-listen-word-a" title="Escuchar solo Palabra A">
+              <span>🔊</span> Escuchar
+            </button>
+          </div>
+
+          <!-- Separador Central VS -->
+          <div class="contrast-center-vs">
+            <div class="vs-circle-badge">VS</div>
+            <div class="vs-wave-line"></div>
+          </div>
+
+          <!-- Tarjeta Palabra B -->
+          <div class="contrast-card card-b" id="contrast-card-b">
+            <div class="contrast-glow"></div>
+            <div class="card-pill-tag tag-b">Palabra B</div>
+            <div class="contrast-img-wrapper" id="img-wrapper-b">
+              <img id="img-pair-b" src="https://static.arasaac.org/pictograms/2582/2582_500.png" alt="Pictograma B" loading="eager">
+            </div>
+            <h3 class="contrast-word-name" id="name-pair-b">TAZA</h3>
+            
+            <div class="contrast-syllables-container" id="syllables-pair-b">
+              <!-- Sílabas Palabra B -->
+            </div>
+
+            <button class="listen-word-pill" id="btn-listen-word-b" title="Escuchar solo Palabra B">
+              <span>🔊</span> Escuchar
+            </button>
+          </div>
         </div>
-        <div class="legend-item">
-          <span class="legend-dot sustained"></span>
-          <span>Sostenida (*)</span>
-        </div>
-      </div>
 
-      <!-- Main Action Controls -->
-      <div class="action-controls">
-        <button id="btn-prev" class="nav-btn prev-btn" aria-label="Palabra anterior">
-          <span class="btn-arrow">◀</span>
-        </button>
-
-        <button id="btn-play-all" class="play-primary-btn" aria-label="Reproducir palabra completa paso a paso">
-          <span class="play-icon" id="play-icon">▶</span>
-          <span class="play-text" id="play-text">Escuchar y Sentir</span>
-        </button>
-
-        <button id="btn-next" class="nav-btn next-btn" aria-label="Palabra siguiente">
-          <span class="btn-arrow">▶</span>
-        </button>
-      </div>
-
-      <div class="secondary-controls">
-        <button id="btn-repeat-word" class="secondary-btn" title="Repetir la palabra a velocidad lenta">
-          <span>🐢</span> Decir Más Lento
-        </button>
-        <button id="btn-natural-speech" class="secondary-btn" title="Pronunciación continua sin pausas">
-          <span>🗣️</span> Palabra Completa
-        </button>
-      </div>
-
-    </main>
-
-    <!-- Word Selector Carousel / Thumbnail Shelf -->
-    <section class="word-shelf-section">
-      <div class="section-title-row">
-        <h2 class="shelf-title">Colección de Palabras</h2>
-        <div class="shelf-action-buttons">
-          <button id="btn-reset-words" class="pill-btn-small reset-btn" title="Restaurar las 6 palabras prototipo iniciales">
-            <span>↺</span> Iniciales
+        <!-- Controles Principales de Comparación -->
+        <div class="action-controls pair-controls">
+          <button id="btn-pair-prev" class="nav-btn prev-btn" aria-label="Par anterior">
+            <span class="btn-arrow">◀</span>
           </button>
-          <button id="btn-add-word-modal" class="pill-btn-small" title="Añadir palabra personalizada">
-            <span>➕</span> Nueva
+
+          <button id="btn-play-pair-sequence" class="play-primary-btn" aria-label="Comparar par completo en secuencia">
+            <span class="play-icon" id="pair-play-icon">▶</span>
+            <span class="play-text" id="pair-play-text">Comparar Par</span>
+          </button>
+
+          <button id="btn-pair-next" class="nav-btn next-btn" aria-label="Par siguiente">
+            <span class="btn-arrow">▶</span>
           </button>
         </div>
-      </div>
-      <div class="word-shelf" id="word-shelf" role="tablist" aria-label="Lista de palabras para practicar">
-        <!-- Generado dinámicamente -->
-      </div>
-    </section>
+
+        <!-- Botones Secundarios -->
+        <div class="secondary-controls pair-secondary">
+          <button id="btn-compare-targets-only" class="secondary-btn" title="Comparar solo las sílabas que cambian">
+            <span>⚡</span> Solo Sílabas Diana
+          </button>
+          <button id="btn-toggle-game-mode" class="secondary-btn game-btn" title="Juego de discriminación: ¿Cuál sonó?">
+            <span>🎮</span> ¿Cuál Sonó?
+          </button>
+        </div>
+
+        <!-- Panel de Juego Interactivo "¿Cuál Sonó?" -->
+        <div class="game-challenge-panel" id="game-challenge-panel" style="display: none;">
+          <div class="game-box-inner">
+            <div class="game-header-row">
+              <span class="game-badge">🎮 Desafío de Discriminación</span>
+              <button class="close-game-btn" id="btn-close-game" title="Salir del juego">✕</button>
+            </div>
+            <p class="game-instruction">Toca el botón, siente la vibración y escucha. Luego elige cuál de las dos es:</p>
+            <div class="game-action-row">
+              <button class="play-challenge-btn" id="btn-play-challenge">
+                <span>🔊📳</span> ¡Tocar Sonido Secreto!
+              </button>
+            </div>
+            <div class="game-options-row" id="game-options-row">
+              <!-- Botones de opción A y B -->
+            </div>
+            <div class="game-feedback-msg" id="game-feedback-msg"></div>
+          </div>
+        </div>
+
+        <!-- Firma Háptica Explicativa (Colapsable al fondo) -->
+        <div class="haptic-signature-box" id="haptic-signature-box">
+          <button class="sig-accordion-toggle" id="btn-toggle-haptic-sig" type="button" aria-expanded="false" aria-controls="sig-content">
+            <div class="sig-toggle-left">
+              <span class="sig-icon">📳</span>
+              <span class="sig-title">Firma Háptica del Contraste</span>
+            </div>
+            <div class="sig-toggle-right">
+              <span class="sig-toggle-hint">Ver detalles táctiles</span>
+              <span class="sig-toggle-icon" id="sig-toggle-icon">▼</span>
+            </div>
+          </button>
+          <div class="sig-content" id="sig-content" style="display: none;">
+            <!-- Dinámico según el par seleccionado -->
+          </div>
+        </div>
+
+      </main>
+    </div>
+
 
     <!-- Sensory Info Box (Educational for Parents and Therapists) -->
     <footer class="app-info-card">

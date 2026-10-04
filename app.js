@@ -86,7 +86,8 @@ const PHONETIC_TTS_MAP = {
   // Evitar símbolos químicos y abreviaturas en motores TTS de celulares
   "na": "ná.",      // Evita 'Sodio' o 'N/A'
   "no": "nó.",
-  "za": "zá.",      // Evita 'Zeta-A' o Sudáfrica
+  "sa": "¡Sa!",     // Evita 'S.A.' (Sociedad Anónima)
+  "za": "zá.",      // Pronunciación de sílaba continua; evita deletreo 'Z-A' o 'Zeta'
   "zo": "zó.",
   "zu": "zú.",
   "ca": "cá.",      // Evita 'Calcio'
@@ -215,11 +216,19 @@ const state = {
   pauseBetweenSyllables: 700,
   harmonicToneEnabled: true,
   selectedVoice: null,
-  spanishVoices: []
+  spanishVoices: [],
+
+  // Estado del Modo Pares Mínimos
+  currentAppMode: "syllables", // "syllables" (Segmentación) | "pairs" (Pares Mínimos)
+  currentPairIndex: 0,
+  isPlayingPairSequence: false,
+  pairSequenceTimeout: null,
+  gameChallengeSecret: null // Para el desafío "¿Cuál sonó?"
 };
 
 // Banco Fonético de Clips Neuronales HD Pregrabados (0ms de latencia)
 const KNOWN_HD_CLIPS = new Set([
+  // Clips de Segmentación Prototipo
   "audio/syl_ca_stressed.mp3",
   "audio/syl_rro.mp3",
   "audio/syl_rro_stressed.mp3",
@@ -255,7 +264,28 @@ const KNOWN_HD_CLIPS = new Set([
   "audio/word_pelota.mp3",
   "audio/word_manzana.mp3",
   "audio/word_cuchara.mp3",
-  "audio/word_juguete.mp3"
+  "audio/word_juguete.mp3",
+
+  // Clips HD para los 4 Pares Mínimos de Prueba
+  "audio/word_casa.mp3",
+  "audio/word_taza.mp3",
+  "audio/word_pato.mp3",
+  "audio/word_gato.mp3",
+  "audio/word_jamon.mp3",
+  "audio/word_jabon.mp3",
+  "audio/word_pino.mp3",
+  "audio/word_vino.mp3",
+  "audio/syl_sa.mp3",
+  "audio/syl_ta_stressed.mp3",
+  "audio/syl_za.mp3",
+  "audio/syl_pa_stressed.mp3",
+  "audio/syl_ga_stressed.mp3",
+  "audio/syl_to.mp3",
+  "audio/syl_ja.mp3",
+  "audio/syl_mon_stressed.mp3",
+  "audio/syl_bon_stressed.mp3",
+  "audio/syl_pi_stressed.mp3",
+  "audio/syl_vi_stressed.mp3"
 ]);
 
 // Web Audio Context y Caché de Precarga en Memoria RAM
@@ -2070,6 +2100,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Inicialización del Modo Pares Mínimos
+  initModeTabs();
+  initMinimalPairs();
+
   // Registro de Service Worker para PWA (Instalable en Android)
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
@@ -2079,3 +2113,989 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+// =========================================================================
+// 12. SISTEMA DE PARES MÍNIMOS (CONTRASTACIÓN MULTISENSORIAL FONÉMICA)
+// =========================================================================
+
+/**
+ * Banco de datos de Pares Mínimos Clínicos para discriminación fonológica.
+ * Sigue la especificación técnica del Punto 3:
+ * - Sílaba Diana (cambiante): patrón háptico dinámico y exclusivo según el fonema.
+ * - Sílaba Base (compartida): patrón háptico estándar neutro uniforme ([50ms]).
+ */
+const MINIMAL_PAIRS_DATA = [
+  {
+    id: "casa-taza",
+    title: "CASA vs TAZA",
+    contrastBadge: "/k/ vs /t/",
+    contrastDesc: "Punto de Articulación: Oclusiva Velar /k/ vs Oclusiva Dental /t/",
+    targetSyllableIndex: 0,
+    hapticSignature: {
+      targetA: "CA: Doble pulso percusivo seco ([140, 40, 90] ms) - Oclusión velar sorda explosiva",
+      targetB: "TA: Chasquido dental corto y agudo ([50, 40, 50, 40, 50] ms) - Oclusión dental de alta frecuencia",
+      shared: "sa / za: Pulso rítmico suave idéntico ([50] ms) - Base neutra no diferenciadora"
+    },
+    wordA: {
+      name: "CASA",
+      arasaacId: 2317,
+      audioFull: "audio/word_casa.mp3",
+      syllables: [
+        {
+          text: "CA",
+          isTarget: true,
+          audio: "audio/syl_ca_stressed.mp3",
+          vibePattern: [140, 40, 90],
+          vibeLabel: "Oclusión Velar /k/",
+          targetClass: "type-target-a"
+        },
+        {
+          text: "sa",
+          isTarget: false,
+          audio: "audio/syl_sa.mp3",
+          vibePattern: [50],
+          vibeLabel: "Sílaba Neutra Base",
+          targetClass: "type-shared"
+        }
+      ]
+    },
+    wordB: {
+      name: "TAZA",
+      arasaacId: 2582,
+      audioFull: "audio/word_taza.mp3",
+      syllables: [
+        {
+          text: "TA",
+          isTarget: true,
+          audio: "audio/syl_ta_stressed.mp3",
+          vibePattern: [50, 40, 50, 40, 50],
+          vibeLabel: "Oclusión Dental /t/",
+          targetClass: "type-target-b"
+        },
+        {
+          text: "za",
+          isTarget: false,
+          audio: "audio/syl_za.mp3",
+          vibePattern: [50],
+          vibeLabel: "Sílaba Neutra Base",
+          targetClass: "type-shared"
+        }
+      ]
+    }
+  },
+  {
+    id: "pato-gato",
+    title: "PATO vs GATO",
+    contrastBadge: "/p/ vs /g/",
+    contrastDesc: "Sonoridad y Punto: Bilabial Sorda /p/ vs Velar Sonora /g/",
+    targetSyllableIndex: 0,
+    hapticSignature: {
+      targetA: "PA: Golpe seco y explosivo ([170] ms) - Oclusión bilabial sorda sin vibración cordal",
+      targetB: "GA: Onda grave continua y resonante ([70, 40, 150] ms) - Sonoridad laríngea sostenida",
+      shared: "to: Pulso rítmico suave idéntico ([50] ms) - Base neutra compartida"
+    },
+    wordA: {
+      name: "PATO",
+      arasaacId: 2563,
+      audioFull: "audio/word_pato.mp3",
+      syllables: [
+        {
+          text: "PA",
+          isTarget: true,
+          audio: "audio/syl_pa_stressed.mp3",
+          vibePattern: [170],
+          vibeLabel: "Explosión Bilabial /p/",
+          targetClass: "type-target-a"
+        },
+        {
+          text: "to",
+          isTarget: false,
+          audio: "audio/syl_to.mp3",
+          vibePattern: [50],
+          vibeLabel: "Sílaba Neutra Base",
+          targetClass: "type-shared"
+        }
+      ]
+    },
+    wordB: {
+      name: "GATO",
+      arasaacId: 2406,
+      audioFull: "audio/word_gato.mp3",
+      syllables: [
+        {
+          text: "GA",
+          isTarget: true,
+          audio: "audio/syl_ga_stressed.mp3",
+          vibePattern: [70, 40, 150],
+          vibeLabel: "Resonancia Velar /g/",
+          targetClass: "type-target-b"
+        },
+        {
+          text: "to",
+          isTarget: false,
+          audio: "audio/syl_to.mp3",
+          vibePattern: [50],
+          vibeLabel: "Sílaba Neutra Base",
+          targetClass: "type-shared"
+        }
+      ]
+    }
+  },
+  {
+    id: "jamon-jabon",
+    title: "JAMÓN vs JABÓN",
+    contrastBadge: "/m/ vs /b/",
+    contrastDesc: "Modo de Articulación en 2ª Sílaba: Nasal Sonora /m/ vs Oclusiva Sonora /b/",
+    targetSyllableIndex: 1, // Diana en la segunda sílaba
+    hapticSignature: {
+      targetA: "MÓN: Zumbido resonante de cavidad nasal ([100, 40, 100] ms) - Resonancia continua",
+      targetB: "BÓN: Pulso elástico pleno y percutivo ([230] ms) - Explosión bilabial plena",
+      shared: "ja: Pulso rítmico suave idéntico ([50] ms) - Base inicial idéntica"
+    },
+    wordA: {
+      name: "JAMÓN",
+      arasaacId: 2433,
+      audioFull: "audio/word_jamon.mp3",
+      syllables: [
+        {
+          text: "ja",
+          isTarget: false,
+          audio: "audio/syl_ja.mp3",
+          vibePattern: [50],
+          vibeLabel: "Sílaba Neutra Base",
+          targetClass: "type-shared"
+        },
+        {
+          text: "MÓN",
+          isTarget: true,
+          audio: "audio/syl_mon_stressed.mp3",
+          vibePattern: [100, 40, 100],
+          vibeLabel: "Resonancia Nasal /m/",
+          targetClass: "type-target-a"
+        }
+      ]
+    },
+    wordB: {
+      name: "JABÓN",
+      arasaacId: 2964,
+      audioFull: "audio/word_jabon.mp3",
+      syllables: [
+        {
+          text: "ja",
+          isTarget: false,
+          audio: "audio/syl_ja.mp3",
+          vibePattern: [50],
+          vibeLabel: "Sílaba Neutra Base",
+          targetClass: "type-shared"
+        },
+        {
+          text: "BÓN",
+          isTarget: true,
+          audio: "audio/syl_bon_stressed.mp3",
+          vibePattern: [230],
+          vibeLabel: "Oclusión Bilabial /b/",
+          targetClass: "type-target-b"
+        }
+      ]
+    }
+  },
+  {
+    id: "pino-vino",
+    title: "PINO vs VINO",
+    contrastBadge: "/p/ vs /v/",
+    contrastDesc: "Modo y Sonoridad: Oclusiva Sorda /p/ vs Fricativa Sonora /v/",
+    targetSyllableIndex: 0,
+    hapticSignature: {
+      targetA: "PI: Impulso seco de alta amplitud ([160] ms) - Oclusión percutiva sin cuerda vocal",
+      targetB: "VI: Rampa de vibración continua y suave ([40, 25, 70, 25, 120] ms) - Fricción sonora ondulante",
+      shared: "no: Pulso estándar neutro uniforme ([50] ms) - Marca el ritmo silábico sin distraer"
+    },
+    wordA: {
+      name: "PINO",
+      arasaacId: 3216,
+      audioFull: "audio/word_pino.mp3",
+      syllables: [
+        {
+          text: "PI",
+          isTarget: true,
+          audio: "audio/syl_pi_stressed.mp3",
+          vibePattern: [160],
+          vibeLabel: "Oclusiva Sorda /p/",
+          targetClass: "type-target-a"
+        },
+        {
+          text: "no",
+          isTarget: false,
+          audio: "audio/syl_no.mp3",
+          vibePattern: [50],
+          vibeLabel: "Sílaba Neutra Base",
+          targetClass: "type-shared"
+        }
+      ]
+    },
+    wordB: {
+      name: "VINO",
+      arasaacId: 2614,
+      audioFull: "audio/word_vino.mp3",
+      syllables: [
+        {
+          text: "VI",
+          isTarget: true,
+          audio: "audio/syl_vi_stressed.mp3",
+          vibePattern: [40, 25, 70, 25, 120],
+          vibeLabel: "Fricativa Sonora /v/",
+          targetClass: "type-target-b"
+        },
+        {
+          text: "no",
+          isTarget: false,
+          audio: "audio/syl_no.mp3",
+          vibePattern: [50],
+          vibeLabel: "Sílaba Neutra Base",
+          targetClass: "type-shared"
+        }
+      ]
+    }
+  }
+];
+
+/**
+ * Inicializa las pestañas de navegación de modos:
+ * - Segmentación Silábica (Modo estándar)
+ * - Pares Mínimos (Nuevo modo de discriminación)
+ */
+function initModeTabs() {
+  const tabSyllables = document.getElementById("tab-btn-syllables");
+  const tabPairs = document.getElementById("tab-btn-pairs");
+  const viewSyllables = document.getElementById("view-syllables-mode");
+  const viewPairs = document.getElementById("view-pairs-mode");
+
+  if (!tabSyllables || !tabPairs || !viewSyllables || !viewPairs) return;
+
+  const switchMode = (mode) => {
+    state.currentAppMode = mode;
+    stopSequence();
+    stopPairSequence();
+
+    if (mode === "syllables") {
+      tabSyllables.classList.add("active");
+      tabSyllables.setAttribute("aria-selected", "true");
+      tabPairs.classList.remove("active");
+      tabPairs.setAttribute("aria-selected", "false");
+
+      viewSyllables.style.display = "block";
+      viewSyllables.classList.add("active");
+      viewPairs.style.display = "none";
+      viewPairs.classList.remove("active");
+
+      triggerHaptic([40], "Modo Segmentación");
+    } else {
+      tabPairs.classList.add("active");
+      tabPairs.setAttribute("aria-selected", "true");
+      tabSyllables.classList.remove("active");
+      tabSyllables.setAttribute("aria-selected", "false");
+
+      viewPairs.style.display = "block";
+      viewPairs.classList.add("active");
+      viewSyllables.style.display = "none";
+      viewSyllables.classList.remove("active");
+
+      renderMinimalPair(state.currentPairIndex);
+      preloadMinimalPairAudios(MINIMAL_PAIRS_DATA[state.currentPairIndex]);
+      triggerHaptic([60, 40, 60], "Modo Pares Mínimos");
+    }
+  };
+
+  tabSyllables.addEventListener("click", () => switchMode("syllables"));
+  tabPairs.addEventListener("click", () => switchMode("pairs"));
+}
+
+/**
+ * Inicializa los eventos y el estado del módulo de Pares Mínimos
+ */
+function initMinimalPairs() {
+  renderPairShelf();
+  renderMinimalPair(state.currentPairIndex);
+
+  // Navegación entre pares
+  const btnPrev = document.getElementById("btn-pair-prev");
+  const btnNext = document.getElementById("btn-pair-next");
+
+  if (btnPrev) {
+    btnPrev.addEventListener("click", () => {
+      stopPairSequence();
+      state.currentPairIndex = (state.currentPairIndex - 1 + MINIMAL_PAIRS_DATA.length) % MINIMAL_PAIRS_DATA.length;
+      renderMinimalPair(state.currentPairIndex);
+      renderPairShelf();
+    });
+  }
+
+  if (btnNext) {
+    btnNext.addEventListener("click", () => {
+      stopPairSequence();
+      state.currentPairIndex = (state.currentPairIndex + 1) % MINIMAL_PAIRS_DATA.length;
+      renderMinimalPair(state.currentPairIndex);
+      renderPairShelf();
+    });
+  }
+
+  // Botón Principal: Comparar Par
+  const btnPlayPair = document.getElementById("btn-play-pair-sequence");
+  if (btnPlayPair) {
+    btnPlayPair.addEventListener("click", () => {
+      initAudioContext();
+      playMinimalPairSequence();
+    });
+  }
+
+  // Botón Secundario: Solo Sílabas Diana
+  const btnCompareTargets = document.getElementById("btn-compare-targets-only");
+  if (btnCompareTargets) {
+    btnCompareTargets.addEventListener("click", () => {
+      initAudioContext();
+      compareTargetSyllables();
+    });
+  }
+
+  // Botón Escuchar Palabra A
+  const btnListenA = document.getElementById("btn-listen-word-a");
+  if (btnListenA) {
+    btnListenA.addEventListener("click", () => {
+      initAudioContext();
+      stopPairSequence();
+      playContrastWordAudio("a");
+    });
+  }
+
+  // Botón Escuchar Palabra B
+  const btnListenB = document.getElementById("btn-listen-word-b");
+  if (btnListenB) {
+    btnListenB.addEventListener("click", () => {
+      initAudioContext();
+      stopPairSequence();
+      playContrastWordAudio("b");
+    });
+  }
+
+  // Botón Juego ¿Cuál Sonó?
+  const btnToggleGame = document.getElementById("btn-toggle-game-mode");
+  const gamePanel = document.getElementById("game-challenge-panel");
+  const btnCloseGame = document.getElementById("btn-close-game");
+  const btnPlayChallenge = document.getElementById("btn-play-challenge");
+
+  if (btnToggleGame && gamePanel) {
+    btnToggleGame.addEventListener("click", () => {
+      const isVisible = gamePanel.style.display !== "none";
+      if (isVisible) {
+        gamePanel.style.display = "none";
+      } else {
+        gamePanel.style.display = "block";
+        startPairChallengeGame();
+      }
+    });
+  }
+
+  if (btnCloseGame && gamePanel) {
+    btnCloseGame.addEventListener("click", () => {
+      gamePanel.style.display = "none";
+      stopPairSequence();
+    });
+  }
+
+  if (btnPlayChallenge) {
+    btnPlayChallenge.addEventListener("click", () => {
+      initAudioContext();
+      playChallengeSecretAudio();
+    });
+  }
+
+  // Toggle de Acordeón Colapsable: Firma Háptica
+  const btnToggleSig = document.getElementById("btn-toggle-haptic-sig");
+  const sigContent = document.getElementById("sig-content");
+  const sigIcon = document.getElementById("sig-toggle-icon");
+  const sigBox = document.getElementById("haptic-signature-box");
+
+  if (btnToggleSig && sigContent) {
+    btnToggleSig.addEventListener("click", () => {
+      const isExpanded = btnToggleSig.getAttribute("aria-expanded") === "true";
+      const newExpanded = !isExpanded;
+      btnToggleSig.setAttribute("aria-expanded", newExpanded ? "true" : "false");
+      sigContent.style.display = newExpanded ? "grid" : "none";
+      if (sigIcon) sigIcon.textContent = newExpanded ? "▲" : "▼";
+      if (sigBox) sigBox.classList.toggle("open", newExpanded);
+      triggerHaptic([35], "Firma Háptica");
+    });
+  }
+}
+
+/**
+ * Renderiza el carrusel superior con los 4 pares de prueba
+ */
+function renderPairShelf() {
+  const shelf = document.getElementById("pair-shelf-scroll");
+  if (!shelf) return;
+
+  shelf.innerHTML = "";
+
+  MINIMAL_PAIRS_DATA.forEach((pair, index) => {
+    const item = document.createElement("button");
+    item.className = `pair-shelf-item ${index === state.currentPairIndex ? "active" : ""}`;
+    item.setAttribute("role", "tab");
+    item.setAttribute("aria-selected", index === state.currentPairIndex ? "true" : "false");
+
+    item.innerHTML = `
+      <span class="shelf-pair-title">${pair.wordA.name} / ${pair.wordB.name}</span>
+      <span class="shelf-pair-badge">${pair.contrastBadge}</span>
+    `;
+
+    item.addEventListener("click", () => {
+      if (state.currentPairIndex !== index) {
+        stopPairSequence();
+        state.currentPairIndex = index;
+        renderMinimalPair(index);
+        renderPairShelf();
+      }
+    });
+
+    shelf.appendChild(item);
+  });
+}
+
+/**
+ * Renderiza el par seleccionado en el escenario dual de contraste
+ */
+function renderMinimalPair(index) {
+  const pair = MINIMAL_PAIRS_DATA[index];
+  if (!pair) return;
+
+  // Actualizar metadatos
+  const counter = document.getElementById("pair-counter");
+  if (counter) counter.textContent = `Par ${index + 1} de ${MINIMAL_PAIRS_DATA.length}`;
+
+  const title = document.getElementById("pair-active-title");
+  if (title) title.textContent = pair.title;
+
+  const badge = document.getElementById("pair-contrast-badge");
+  if (badge) badge.textContent = pair.contrastBadge;
+
+  const typeDesc = document.getElementById("contrast-type-text");
+  if (typeDesc) typeDesc.textContent = pair.contrastDesc;
+
+  // Renderizar Tarjeta A
+  const imgA = document.getElementById("img-pair-a");
+  if (imgA) {
+    imgA.src = `https://static.arasaac.org/pictograms/${pair.wordA.arasaacId}/${pair.wordA.arasaacId}_500.png`;
+    imgA.alt = `Pictograma de ${pair.wordA.name}`;
+  }
+  const nameA = document.getElementById("name-pair-a");
+  if (nameA) nameA.textContent = pair.wordA.name;
+
+  const sylContainerA = document.getElementById("syllables-pair-a");
+  if (sylContainerA) {
+    sylContainerA.innerHTML = "";
+    pair.wordA.syllables.forEach((syl, sylIdx) => {
+      const pill = createContrastSyllablePill(syl, "a", sylIdx);
+      sylContainerA.appendChild(pill);
+    });
+  }
+
+  // Renderizar Tarjeta B
+  const imgB = document.getElementById("img-pair-b");
+  if (imgB) {
+    imgB.src = `https://static.arasaac.org/pictograms/${pair.wordB.arasaacId}/${pair.wordB.arasaacId}_500.png`;
+    imgB.alt = `Pictograma de ${pair.wordB.name}`;
+  }
+  const nameB = document.getElementById("name-pair-b");
+  if (nameB) nameB.textContent = pair.wordB.name;
+
+  const sylContainerB = document.getElementById("syllables-pair-b");
+  if (sylContainerB) {
+    sylContainerB.innerHTML = "";
+    pair.wordB.syllables.forEach((syl, sylIdx) => {
+      const pill = createContrastSyllablePill(syl, "b", sylIdx);
+      sylContainerB.appendChild(pill);
+    });
+  }
+
+  // Renderizar caja de firma háptica
+  renderHapticSignatureBox(pair);
+
+  // Si el panel de juego está abierto, actualizarlo para este par
+  const gamePanel = document.getElementById("game-challenge-panel");
+  if (gamePanel && gamePanel.style.display !== "none") {
+    startPairChallengeGame();
+  }
+
+  // Precargar audios del par
+  preloadMinimalPairAudios(pair);
+}
+
+/**
+ * Crea una píldora interactiva para una sílaba en el modo de contraste
+ */
+function createContrastSyllablePill(syl, wordKey, sylIndex) {
+  const pill = document.createElement("button");
+  pill.className = `contrast-syllable-pill ${syl.targetClass}`;
+  pill.id = `pair-${wordKey}-syl-${sylIndex}`;
+  pill.setAttribute("aria-label", `Sílaba ${syl.text} (${syl.vibeLabel})`);
+
+  const textSpan = document.createElement("span");
+  textSpan.className = "contrast-syl-text";
+  textSpan.textContent = syl.text;
+
+  const badge = document.createElement("span");
+  badge.className = "contrast-syl-badge";
+  badge.textContent = syl.isTarget ? "⚡ Diana" : "Base";
+
+  pill.appendChild(textSpan);
+  pill.appendChild(badge);
+
+  pill.addEventListener("click", () => {
+    initAudioContext();
+    stopPairSequence();
+    playContrastSyllableAudio(syl, wordKey, pill);
+  });
+
+  return pill;
+}
+
+/**
+ * Renderiza la caja explicativa de la firma háptica según el par
+ */
+function renderHapticSignatureBox(pair) {
+  const sigContent = document.getElementById("sig-content");
+  if (!sigContent) return;
+
+  sigContent.innerHTML = `
+    <div class="sig-item sig-a">
+      <div class="sig-item-head">
+        <span class="sig-badge a">Diana A (${pair.wordA.name})</span>
+      </div>
+      <span class="sig-desc">${pair.hapticSignature.targetA}</span>
+    </div>
+    <div class="sig-item sig-b">
+      <div class="sig-item-head">
+        <span class="sig-badge b">Diana B (${pair.wordB.name})</span>
+      </div>
+      <span class="sig-desc">${pair.hapticSignature.targetB}</span>
+    </div>
+    <div class="sig-item sig-shared">
+      <div class="sig-item-head">
+        <span class="sig-badge base">Sílaba Compartida</span>
+      </div>
+      <span class="sig-desc">${pair.hapticSignature.shared}</span>
+    </div>
+  `;
+}
+
+/**
+ * Reproduce el audio y dispara la vibración diferenciada de una sílaba en el modo de pares.
+ * También ilumina temporalmente la tarjeta de la palabra correspondiente para asociar voz y concepto.
+ */
+async function playContrastSyllableAudio(syl, wordKey, pillEl) {
+  const allPills = document.querySelectorAll(".contrast-syllable-pill");
+  allPills.forEach(p => p.classList.remove("active"));
+
+  if (pillEl) pillEl.classList.add("active");
+
+  const cardEl = document.getElementById(`contrast-card-${wordKey}`);
+  if (cardEl && !state.isPlayingPairSequence) {
+    cardEl.classList.add("active-speaking");
+  }
+
+  const onAudioStart = () => {
+    triggerHaptic(syl.vibePattern, syl.vibeLabel);
+    playHarmonicCue(syl.isTarget ? (wordKey === "a" ? "stressed" : "sustained") : "normal");
+  };
+
+  try {
+    if (state.audioMode === "hd" && syl.audio && KNOWN_HD_CLIPS.has(syl.audio)) {
+      await playAudioClip(syl.audio, onAudioStart);
+    } else if (state.audioMode === "edge") {
+      const buffer = await synthesizeWithEdgeTTS(syl.text.toLowerCase(), syl.isTarget ? "stressed" : "normal");
+      if (buffer) {
+        await playDecodedAudioBuffer(buffer, onAudioStart);
+      } else {
+        await speakContrastTTS(syl.text, syl.isTarget, onAudioStart);
+      }
+    } else {
+      await speakContrastTTS(syl.text, syl.isTarget, onAudioStart);
+    }
+  } catch (e) {
+    await speakContrastTTS(syl.text, syl.isTarget, onAudioStart);
+  } finally {
+    if (pillEl) {
+      setTimeout(() => {
+        pillEl.classList.remove("active");
+      }, 150);
+    }
+    if (cardEl && !state.isPlayingPairSequence) {
+      setTimeout(() => {
+        cardEl.classList.remove("active-speaking");
+      }, 250);
+    }
+  }
+}
+
+/**
+ * Reproduce la palabra completa de una de las tarjetas (A o B)
+ * e ilumina el fondo de su tarjeta correspondiente (Verde para A, Azul para B)
+ */
+async function playContrastWordAudio(wordKey) {
+  const pair = MINIMAL_PAIRS_DATA[state.currentPairIndex];
+  if (!pair) return;
+
+  const wordObj = wordKey === "a" ? pair.wordA : pair.wordB;
+  const cardEl = document.getElementById(`contrast-card-${wordKey}`);
+
+  if (cardEl) cardEl.classList.add("active-speaking");
+
+  const onAudioStart = () => {
+    triggerHaptic([180, 50, 180, 50, 240], `Palabra: ${wordObj.name}`, 700);
+  };
+
+  try {
+    if (state.audioMode === "hd" && wordObj.audioFull && KNOWN_HD_CLIPS.has(wordObj.audioFull)) {
+      await playAudioClip(wordObj.audioFull, onAudioStart);
+    } else if (state.audioMode === "edge") {
+      const buffer = await synthesizeWithEdgeTTS(wordObj.name.toLowerCase(), "word");
+      if (buffer) {
+        await playDecodedAudioBuffer(buffer, onAudioStart);
+      } else {
+        await speakWordTTS(wordObj.name, onAudioStart);
+      }
+    } else {
+      await speakWordTTS(wordObj.name, onAudioStart);
+    }
+  } catch (e) {
+    await speakWordTTS(wordObj.name, onAudioStart);
+  } finally {
+    if (cardEl && !state.isPlayingPairSequence) {
+      setTimeout(() => {
+        cardEl.classList.remove("active-speaking");
+      }, 250);
+    }
+  }
+}
+
+/**
+ * Fallback TTS para sílaba contrastante
+ */
+function speakContrastTTS(text, isTarget, onStart) {
+  return new Promise((resolve) => {
+    if (!("speechSynthesis" in window) || !state.soundEnabled) {
+      if (typeof onStart === "function") onStart();
+      resolve(true);
+      return;
+    }
+
+    const clean = text.replace(/\*/g, "").toLowerCase();
+    const ttsText = normalizeForTTS(clean, isTarget, false);
+    const utt = new SpeechSynthesisUtterance(ttsText);
+    utt.lang = "es-ES";
+    utt.rate = 0.85;
+    utt.pitch = isTarget ? 1.3 : 1.0;
+
+    let fired = false;
+    utt.onstart = () => {
+      if (!fired) {
+        fired = true;
+        if (typeof onStart === "function") onStart();
+      }
+    };
+    utt.onend = () => resolve(true);
+    utt.onerror = () => resolve(false);
+
+    window.speechSynthesis.speak(utt);
+  });
+}
+
+/**
+ * Fallback TTS para palabra completa
+ */
+function speakWordTTS(name, onStart) {
+  return new Promise((resolve) => {
+    if (!("speechSynthesis" in window) || !state.soundEnabled) {
+      if (typeof onStart === "function") onStart();
+      resolve(true);
+      return;
+    }
+
+    const utt = new SpeechSynthesisUtterance(name);
+    utt.lang = "es-ES";
+    utt.rate = 0.85;
+
+    let fired = false;
+    utt.onstart = () => {
+      if (!fired) {
+        fired = true;
+        if (typeof onStart === "function") onStart();
+      }
+    };
+    utt.onend = () => resolve(true);
+    utt.onerror = () => resolve(false);
+
+    window.speechSynthesis.speak(utt);
+  });
+}
+
+/**
+ * Ejecuta la secuencia comparativa completa:
+ * 1. Ilumina Tarjeta A (VERDE) y reproduce: Sílaba 1 -> Sílaba 2 -> Palabra A completa
+ * 2. Apaga Tarjeta A y realiza pausa de respiración (650ms)
+ * 3. Ilumina Tarjeta B (AZUL) y reproduce: Sílaba 1 -> Sílaba 2 -> Palabra B completa
+ * 4. Apaga Tarjeta B y lanza confeti de celebración
+ */
+async function playMinimalPairSequence() {
+  if (state.isPlayingPairSequence) {
+    stopPairSequence();
+    return;
+  }
+
+  const pair = MINIMAL_PAIRS_DATA[state.currentPairIndex];
+  if (!pair) return;
+
+  state.isPlayingPairSequence = true;
+  updatePairPlayButton(true);
+
+  const delay = (ms) => new Promise(resolve => {
+    state.pairSequenceTimeout = setTimeout(resolve, ms);
+  });
+
+  const cardA = document.getElementById("contrast-card-a");
+  const cardB = document.getElementById("contrast-card-b");
+
+  // PARTE 1: PALABRA A (Iluminar fondo de la tarjeta A en VERDE)
+  if (cardA) cardA.classList.add("active-speaking");
+  if (cardB) cardB.classList.remove("active-speaking");
+
+  for (let i = 0; i < pair.wordA.syllables.length; i++) {
+    if (!state.isPlayingPairSequence) break;
+    const syl = pair.wordA.syllables[i];
+    const pill = document.getElementById(`pair-a-syl-${i}`);
+    await playContrastSyllableAudio(syl, "a", pill);
+    await delay(550);
+  }
+
+  if (state.isPlayingPairSequence) {
+    await playContrastWordAudio("a");
+    await delay(250);
+  }
+
+  // Apagar iluminación verde de Palabra A
+  if (cardA) cardA.classList.remove("active-speaking");
+
+  if (state.isPlayingPairSequence) {
+    await delay(650); // Pausa de respiración entre A y B
+  }
+
+  // PARTE 2: PALABRA B (Iluminar fondo de la tarjeta B en AZUL)
+  if (state.isPlayingPairSequence) {
+    if (cardB) cardB.classList.add("active-speaking");
+    if (cardA) cardA.classList.remove("active-speaking");
+
+    for (let i = 0; i < pair.wordB.syllables.length; i++) {
+      if (!state.isPlayingPairSequence) break;
+      const syl = pair.wordB.syllables[i];
+      const pill = document.getElementById(`pair-b-syl-${i}`);
+      await playContrastSyllableAudio(syl, "b", pill);
+      await delay(550);
+    }
+
+    if (state.isPlayingPairSequence) {
+      await playContrastWordAudio("b");
+      await delay(250);
+    }
+
+    // Apagar iluminación azul de Palabra B
+    if (cardB) cardB.classList.remove("active-speaking");
+
+    if (state.isPlayingPairSequence) {
+      triggerConfetti();
+    }
+  }
+
+  stopPairSequence();
+}
+
+/**
+ * Detiene la reproducción de la secuencia de pares
+ */
+function stopPairSequence() {
+  state.isPlayingPairSequence = false;
+  if (state.pairSequenceTimeout) {
+    clearTimeout(state.pairSequenceTimeout);
+    state.pairSequenceTimeout = null;
+  }
+
+  stopAllAudio();
+
+  const allPills = document.querySelectorAll(".contrast-syllable-pill");
+  allPills.forEach(p => p.classList.remove("active"));
+
+  const cardA = document.getElementById("contrast-card-a");
+  const cardB = document.getElementById("contrast-card-b");
+  if (cardA) cardA.classList.remove("active-speaking", "active-glow");
+  if (cardB) cardB.classList.remove("active-speaking", "active-glow");
+
+  updatePairPlayButton(false);
+}
+
+function updatePairPlayButton(isPlaying) {
+  const btn = document.getElementById("btn-play-pair-sequence");
+  const icon = document.getElementById("pair-play-icon");
+  const text = document.getElementById("pair-play-text");
+
+  if (!btn || !icon || !text) return;
+
+  if (isPlaying) {
+    btn.classList.add("playing");
+    icon.textContent = "⏹";
+    text.textContent = "Detener";
+  } else {
+    btn.classList.remove("playing");
+    icon.textContent = "▶";
+    text.textContent = "Comparar Par";
+  }
+}
+
+/**
+ * Comparación directa y rápida de solo las sílabas diana (contrastantes)
+ */
+async function compareTargetSyllables() {
+  stopPairSequence();
+  const pair = MINIMAL_PAIRS_DATA[state.currentPairIndex];
+  if (!pair) return;
+
+  const targetA = pair.wordA.syllables.find(s => s.isTarget);
+  const targetB = pair.wordB.syllables.find(s => s.isTarget);
+  const targetAIdx = pair.wordA.syllables.findIndex(s => s.isTarget);
+  const targetBIdx = pair.wordB.syllables.findIndex(s => s.isTarget);
+
+  if (!targetA || !targetB) return;
+
+  const pillA = document.getElementById(`pair-a-syl-${targetAIdx}`);
+  const pillB = document.getElementById(`pair-b-syl-${targetBIdx}`);
+
+  // Reproducir Diana A
+  await playContrastSyllableAudio(targetA, "a", pillA);
+  await new Promise(r => setTimeout(r, 450));
+
+  // Reproducir Diana B
+  await playContrastSyllableAudio(targetB, "b", pillB);
+}
+
+/**
+ * Inicializa el juego interactivo "¿Cuál Sonó?" para discriminar el par actual
+ */
+function startPairChallengeGame() {
+  const pair = MINIMAL_PAIRS_DATA[state.currentPairIndex];
+  if (!pair) return;
+
+  // Elegir aleatoriamente palabra A o B
+  const pick = Math.random() < 0.5 ? "a" : "b";
+  state.gameChallengeSecret = {
+    wordKey: pick,
+    wordObj: pick === "a" ? pair.wordA : pair.wordB
+  };
+
+  const feedback = document.getElementById("game-feedback-msg");
+  if (feedback) {
+    feedback.textContent = "";
+    feedback.className = "game-feedback-msg";
+  }
+
+  // Renderizar las 2 opciones interactivas
+  const optionsRow = document.getElementById("game-options-row");
+  if (optionsRow) {
+    optionsRow.innerHTML = `
+      <button class="game-opt-card" id="game-opt-a" data-choice="a">
+        <img src="https://static.arasaac.org/pictograms/${pair.wordA.arasaacId}/${pair.wordA.arasaacId}_500.png" alt="${pair.wordA.name}">
+        <span>${pair.wordA.name}</span>
+      </button>
+      <button class="game-opt-card" id="game-opt-b" data-choice="b">
+        <img src="https://static.arasaac.org/pictograms/${pair.wordB.arasaacId}/${pair.wordB.arasaacId}_500.png" alt="${pair.wordB.name}">
+        <span>${pair.wordB.name}</span>
+      </button>
+    `;
+
+    const optA = document.getElementById("game-opt-a");
+    const optB = document.getElementById("game-opt-b");
+
+    const handleChoice = (chosenKey) => {
+      const isCorrect = chosenKey === state.gameChallengeSecret.wordKey;
+      if (isCorrect) {
+        if (feedback) {
+          feedback.textContent = "🎉 ¡Excelente! ¡Diferenciaste la palabra correctamente!";
+          feedback.className = "game-feedback-msg success";
+        }
+        triggerConfetti();
+        triggerHaptic([100, 40, 200, 40, 300], "¡Correcto!", 680);
+        playHarmonicCue("stressed");
+
+        // Preparar siguiente desafío tras 2 segundos
+        setTimeout(() => {
+          if (document.getElementById("game-challenge-panel").style.display !== "none") {
+            startPairChallengeGame();
+          }
+        }, 2200);
+      } else {
+        if (feedback) {
+          feedback.textContent = "🤔 Casi. Escucha y siente la vibración de nuevo para notar la diferencia.";
+          feedback.className = "game-feedback-msg error";
+        }
+        triggerHaptic([60, 40, 60], "Inténtalo de nuevo");
+      }
+    };
+
+    if (optA) optA.addEventListener("click", () => handleChoice("a"));
+    if (optB) optB.addEventListener("click", () => handleChoice("b"));
+  }
+}
+
+/**
+ * Reproduce el sonido secreto del juego con su firma háptica correspondiente
+ */
+async function playChallengeSecretAudio() {
+  if (!state.gameChallengeSecret) return;
+
+  const { wordKey, wordObj } = state.gameChallengeSecret;
+  const onAudioStart = () => {
+    triggerHaptic([180, 50, 180, 50, 240], "Sonido Secreto", 700);
+  };
+
+  try {
+    if (state.audioMode === "hd" && wordObj.audioFull && KNOWN_HD_CLIPS.has(wordObj.audioFull)) {
+      await playAudioClip(wordObj.audioFull, onAudioStart);
+    } else if (state.audioMode === "edge") {
+      const buffer = await synthesizeWithEdgeTTS(wordObj.name.toLowerCase(), "word");
+      if (buffer) {
+        await playDecodedAudioBuffer(buffer, onAudioStart);
+      } else {
+        await speakWordTTS(wordObj.name, onAudioStart);
+      }
+    } else {
+      await speakWordTTS(wordObj.name, onAudioStart);
+    }
+  } catch (e) {
+    await speakWordTTS(wordObj.name, onAudioStart);
+  }
+}
+
+/**
+ * Precarga en memoria los clips de audio del par mínimo actual para reproducción con 0ms de latencia
+ */
+function preloadMinimalPairAudios(pair) {
+  if (!pair) return;
+
+  if (pair.wordA.audioFull) preloadAudioClip(pair.wordA.audioFull);
+  if (pair.wordB.audioFull) preloadAudioClip(pair.wordB.audioFull);
+
+  pair.wordA.syllables.forEach(s => {
+    if (s.audio) preloadAudioClip(s.audio);
+  });
+  pair.wordB.syllables.forEach(s => {
+    if (s.audio) preloadAudioClip(s.audio);
+  });
+}
+
